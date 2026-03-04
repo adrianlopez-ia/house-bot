@@ -1,0 +1,197 @@
+#!/usr/bin/env python3
+"""Madrid Housing Bot -- composition root.
+
+This module is the single place where all services are instantiated and
+wired together (Dependency Injection via constructors).  No service knows
+how the others are created; they only depend on protocols and interfaces.
+"""
+from __future__ import annotations
+
+import asyncio
+import logging
+import signal
+import sys
+
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
+
+from config import Settings, load_settings
+from exceptions import ConfigError
+
+logger = logging.getLogger("house_bot")
+
+
+def _setup_logging() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        handlers=[
+            logging.StreamHandler(sys.stdout),
+            logging.FileHandler("house_bot.log", encoding="utf-8"),
+        ],
+    )
+
+
+# ── Service container ──────────────────────────────────────────────────
+
+class _Container:
+    """Holds all service instances -- created once, used everywhere."""
+
+    def __init__(self, settings: Settings) -> None:
+        self.settings = settings
+
+        from ai.gemini import GeminiAnalyzer
+        from db.repository import Repository
+        from discovery.service import DiscoveryService
+        from forms.service import FormService
+        from notifier.service import NotifierService
+        from scraper.browser import BrowserManager
+        from scraper.service import ScraperService
+
+        self.repo = Repository(settings.db_path)
+        self.ai = GeminiAnalyzer(settings.gemini_api_key, settings.gemini_model)
+        self.browser = BrowserManager(timeout_ms=settings.playwright_timeout_ms)
+
+        self.discovery = DiscoveryService(self.repo)
+        self.scraper = ScraperService(self.repo, self.ai, self.browser)
+        self.forms = FormService(
+            self.repo, self.ai, self.browser,
+            settings.user_data.as_dict(),
+            settings.screenshots_dir,
+        )
+        self.notifier = NotifierService(
+            settings.telegram_bot_token,
+            settings.telegram_chat_id,
+            self.repo,
+        )
+        self.notifier.set_services(self.discovery, self.scraper, self.forms)
+
+    async def startup(self) -> None:
+        await self.repo.init()
+        await self.notifier.start()
+
+    async def shutdown(self) -> None:
+        await self.notifier.stop()
+        await self.browser.close()
+
+
+# ── Scheduled jobs ─────────────────────────────────────────────────────
+
+async def _job_scrape(c: _Container) -> None:
+    logger.info("JOB scrape start")
+    try:
+        summary = await c.scraper.analyze_all()
+        sent = await c.notifier.send_new_alerts()
+        logger.info("JOB scrape done: %d opps, %d alerts", summary.opportunities_found, sent)
+    except Exception as exc:
+        logger.error("JOB scrape failed: %s", exc)
+
+
+async def _job_discover(c: _Container) -> None:
+    logger.info("JOB discover start")
+    try:
+        new_sites = await c.discovery.discover()
+        if new_sites:
+            names = "\n".join(f"  - {s.name}" for s in new_sites[:10])
+            await c.notifier.send(f"*Nuevos sitios descubiertos:* {len(new_sites)}\n{names}")
+        await c.scraper.analyze_all()
+        await c.notifier.send_new_alerts()
+        logger.info("JOB discover done: %d new", len(new_sites))
+    except Exception as exc:
+        logger.error("JOB discover failed: %s", exc)
+
+
+async def _job_fill_forms(c: _Container) -> None:
+    logger.info("JOB fill_forms start")
+    try:
+        result = await c.forms.fill_pending()
+        if result.filled > 0:
+            await c.notifier.send(
+                f"*Formularios rellenados:* {result.filled}\n"
+                f"Errores: {result.errors}\nOmitidos: {result.skipped}",
+            )
+        logger.info("JOB fill_forms done: %s", result)
+    except Exception as exc:
+        logger.error("JOB fill_forms failed: %s", exc)
+
+
+async def _job_weekly(c: _Container) -> None:
+    logger.info("JOB weekly_report")
+    try:
+        await c.notifier.send_weekly_report()
+    except Exception as exc:
+        logger.error("JOB weekly_report failed: %s", exc)
+
+
+async def _initial_run(c: _Container) -> None:
+    logger.info("Initial run start")
+    await c.discovery.load_seeds()
+    await c.discovery.discover()
+    await c.scraper.analyze_all()
+    await c.notifier.send_new_alerts()
+    await c.forms.fill_pending()
+    logger.info("Initial run complete")
+
+
+# ── Entry point ────────────────────────────────────────────────────────
+
+async def main() -> None:
+    _setup_logging()
+    settings = load_settings()
+
+    missing = settings.validate_required()
+    if missing:
+        for key in missing:
+            logger.error("Missing required config: %s", key)
+        raise ConfigError(
+            "Fix .env and restart. See .env.example for reference. "
+            f"Missing: {', '.join(missing)}"
+        )
+
+    container = _Container(settings)
+    await container.startup()
+    logger.info("All services started")
+
+    s = settings
+    scheduler = AsyncIOScheduler()
+    scheduler.add_job(
+        _job_scrape, IntervalTrigger(hours=s.scrape_interval_hours),
+        args=[container], id="scrape", max_instances=1,
+    )
+    scheduler.add_job(
+        _job_discover, IntervalTrigger(hours=s.discovery_interval_hours),
+        args=[container], id="discover", max_instances=1,
+    )
+    scheduler.add_job(
+        _job_fill_forms, IntervalTrigger(hours=s.form_fill_interval_hours),
+        args=[container], id="fill_forms", max_instances=1,
+    )
+    scheduler.add_job(
+        _job_weekly, CronTrigger(day_of_week="mon", hour=9, minute=0),
+        args=[container], id="weekly_report", max_instances=1,
+    )
+    scheduler.start()
+    logger.info(
+        "Scheduler: scrape=%dh, discover=%dh, forms=%dh, weekly=Mon 09:00",
+        s.scrape_interval_hours, s.discovery_interval_hours, s.form_fill_interval_hours,
+    )
+
+    asyncio.create_task(_initial_run(container))
+
+    stop = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, stop.set)
+
+    logger.info("Bot running. Press Ctrl+C to stop.")
+    await stop.wait()
+
+    logger.info("Shutting down...")
+    scheduler.shutdown(wait=False)
+    await container.shutdown()
+    logger.info("Shutdown complete")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

@@ -1,0 +1,10 @@
+.env
+__pycache__/
+*.pyc
+house_bot.db
+screenshots/
+.venv/
+venv/
+*.egg-info/
+dist/
+build/

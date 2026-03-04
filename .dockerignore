@@ -1,0 +1,11 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+.env
+house_bot.db
+screenshots/
+.git/
+.cursor/
+*.log
+get_chat_id.py
