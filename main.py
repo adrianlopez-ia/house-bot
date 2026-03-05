@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import signal
 import sys
+from aiohttp import web
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -31,6 +33,25 @@ def _setup_logging() -> None:
             logging.FileHandler("house_bot.log", encoding="utf-8"),
         ],
     )
+
+
+# ── Health-check HTTP server (keeps Render alive) ─────────────────────
+
+async def _health(_request: web.Request) -> web.Response:
+    return web.Response(text="OK")
+
+
+async def _start_health_server() -> web.AppRunner:
+    app = web.Application()
+    app.router.add_get("/", _health)
+    app.router.add_get("/health", _health)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.environ.get("PORT", "10000"))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    logger.info("Health server listening on port %d", port)
+    return runner
 
 
 # ── Service container ──────────────────────────────────────────────────
@@ -149,6 +170,8 @@ async def main() -> None:
             f"Missing: {', '.join(missing)}"
         )
 
+    health_runner = await _start_health_server()
+
     container = _Container(settings)
     await container.startup()
     logger.info("All services started")
@@ -190,6 +213,7 @@ async def main() -> None:
     logger.info("Shutting down...")
     scheduler.shutdown(wait=False)
     await container.shutdown()
+    await health_runner.cleanup()
     logger.info("Shutdown complete")
 
 

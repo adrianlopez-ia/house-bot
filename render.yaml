@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: house-bot
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      - key: USER_FULL_NAME
+        sync: false
+      - key: USER_EMAIL
+        sync: false
+      - key: USER_PHONE
+        sync: false
