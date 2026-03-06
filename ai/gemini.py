@@ -14,12 +14,12 @@ from exceptions import AIAnalysisError
 
 logger = logging.getLogger(__name__)
 
-_MAX_PAGE_CHARS = 15_000
-_MAX_HTML_CHARS = 12_000
+_MAX_PAGE_CHARS = 12_000
+_MAX_HTML_CHARS = 8_000
 _MAX_CONTEXT_CHARS = 2_000
 
-_MAX_RETRIES = 3
-_BASE_BACKOFF_SECS = 10.0
+_MAX_RETRIES = 4
+_BASE_BACKOFF_SECS = 15.0
 _RETRY_DELAY_RE = re.compile(r"retryDelay.*?(\d+)")
 
 
@@ -54,7 +54,7 @@ class GeminiAnalyzer:
                 last_exc = exc
                 err = str(exc)
                 if "429" in err and attempt < _MAX_RETRIES:
-                    wait = _parse_retry_delay(err) + attempt * 5
+                    wait = _parse_retry_delay(err) + attempt * 10
                     logger.warning(
                         "Rate-limited (attempt %d/%d), waiting %.0fs",
                         attempt + 1, _MAX_RETRIES, wait,
@@ -114,6 +114,49 @@ class GeminiAnalyzer:
         except Exception as exc:
             logger.error("detect_forms failed for %s: %s", url, exc)
             return []
+
+    async def analyze_page_and_forms(
+        self, text: str, html: str, url: str, zone: str,
+    ) -> dict[str, Any]:
+        """Single API call that extracts both opportunities and forms."""
+        prompt = (
+            "Eres un experto en mercado inmobiliario de Madrid.\n"
+            "Analiza el contenido de esta pagina web y haz DOS cosas:\n\n"
+            "1) Extrae TODAS las oportunidades de vivienda "
+            "(cooperativas, obra nueva, promociones)\n"
+            "2) Detecta formularios de contacto, inscripcion o "
+            "solicitud de informacion\n\n"
+            f"URL: {url}\nZona objetivo: {zone}\n\n"
+            "Responde con UN SOLO JSON objeto con dos claves:\n\n"
+            '"opportunities": array donde cada elemento tiene:\n'
+            '  - "title": nombre del proyecto\n'
+            '  - "description": descripcion breve (max 300 chars)\n'
+            '  - "estimated_price": precio o rango (string o null)\n'
+            '  - "status": "nueva"|"en_curso"|"proxima"|"cerrada"\n'
+            '  - "ai_score": interes 1-10\n'
+            '  - "url": URL directa\n\n'
+            '"forms": array donde cada elemento tiene:\n'
+            '  - "form_type": "contacto"|"inscripcion"|"informacion"\n'
+            '  - "description": que pide el formulario\n'
+            '  - "fields": lista de campos\n\n'
+            "Sin oportunidades o formularios -> arrays vacios.\n"
+            "Responde SOLO con el JSON objeto.\n\n"
+            f"Contenido texto:\n{text[:_MAX_PAGE_CHARS]}\n\n"
+            f"HTML (extracto):\n{html[:_MAX_HTML_CHARS]}"
+        )
+        try:
+            raw = await self._generate(prompt)
+            result = parse_json_object(raw)
+            if "opportunities" not in result:
+                result["opportunities"] = []
+            if "forms" not in result:
+                result["forms"] = []
+            return result
+        except AIAnalysisError:
+            raise
+        except Exception as exc:
+            logger.error("analyze_page_and_forms failed for %s: %s", url, exc)
+            return {"opportunities": [], "forms": []}
 
     async def generate_search_queries(
         self, known_sites: list[str],

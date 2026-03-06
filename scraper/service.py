@@ -1,7 +1,7 @@
 """Scraper orchestration service.
 
 Coordinates browser scraping, AI analysis, and persistence for each site.
-All external dependencies are injected via the constructor.
+Uses a single AI call per site to conserve API quota.
 """
 from __future__ import annotations
 
@@ -18,6 +18,9 @@ from exceptions import ScraperError
 from scraper.browser import BrowserManager
 
 logger = logging.getLogger(__name__)
+
+_MIN_CONTENT_CHARS = 20
+_DELAY_BETWEEN_SITES_SECS = 8
 
 
 class ScraperService:
@@ -37,11 +40,22 @@ class ScraperService:
             logger.warning("Skipping %s: %s", site.url, result.error)
             return AnalysisResult(error=result.error)
 
+        if len(result.text.strip()) < _MIN_CONTENT_CHARS:
+            logger.info(
+                "Skipping %s: too little content (%d chars)",
+                site.url, len(result.text.strip()),
+            )
+            await self._repo.mark_site_visited(site.id)
+            return AnalysisResult()
+
         zone_str = site.zone.value if site.zone is not Zone.TODAS else ""
 
-        raw_opps = await self._ai.analyze_page(result.text, site.url, zone_str)
+        combined = await self._ai.analyze_page_and_forms(
+            result.text, result.html, site.url, zone_str,
+        )
+
         opp_count = 0
-        for data in raw_opps:
+        for data in combined.get("opportunities", []):
             opp = Opportunity(
                 site_id=site.id,
                 title=data.get("title", "Sin titulo"),
@@ -56,10 +70,8 @@ class ScraperService:
             opp_count += 1
             logger.info("Opportunity: %s (score=%s)", opp.title, opp.ai_score)
 
-        await asyncio.sleep(3)
-        raw_forms = await self._ai.detect_forms(result.html, site.url)
         form_count = 0
-        for fdata in raw_forms:
+        for fdata in combined.get("forms", []):
             form = FormSubmission(
                 site_id=site.id,
                 form_url=site.url,
@@ -89,7 +101,7 @@ class ScraperService:
                 errors += 1
 
             if idx < len(sites) - 1:
-                await asyncio.sleep(4)
+                await asyncio.sleep(_DELAY_BETWEEN_SITES_SECS)
 
         summary = AnalysisSummary(
             sites_analyzed=len(sites),

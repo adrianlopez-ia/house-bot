@@ -20,6 +20,10 @@ class AIAnalyzer(Protocol):
         self, html: str, url: str,
     ) -> list[dict[str, str]]: ...
 
+    async def analyze_page_and_forms(
+        self, text: str, html: str, url: str, zone: str,
+    ) -> dict[str, Any]: ...
+
     async def generate_search_queries(
         self, known_sites: list[str],
     ) -> list[dict[str, str]]: ...

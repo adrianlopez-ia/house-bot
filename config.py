@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     screenshots_dir: Path = _BASE_DIR / "screenshots"
 
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.0-flash"
+    gemini_model: str = "gemini-2.5-flash"
 
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
