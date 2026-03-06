@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>House Bot Madrid — Dashboard</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+tailwind.config = {
+  darkMode: 'class',
+  theme: {
+    extend: {
+      colors: {
+        brand: { 50:'#eff6ff',100:'#dbeafe',200:'#bfdbfe',300:'#93c5fd',400:'#60a5fa',500:'#3b82f6',600:'#2563eb',700:'#1d4ed8',800:'#1e40af',900:'#1e3a8a' }
+      }
+    }
+  }
+}
+</script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+body { font-family: 'Inter', system-ui, sans-serif; }
+.fade-in { animation: fadeIn .3s ease-out; }
+@keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+.glass { backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+::-webkit-scrollbar { width:6px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:#475569; border-radius:3px; }
+.tab-active { border-bottom:2px solid #3b82f6; color:#3b82f6; font-weight:600; }
+.badge { display:inline-flex; align-items:center; padding:2px 8px; border-radius:9999px; font-size:0.7rem; font-weight:600; text-transform:uppercase; letter-spacing:.03em; }
+.score-bar { height:6px; border-radius:3px; transition: width .5s ease; }
+</style>
+</head>
+
+<body class="bg-gray-950 text-gray-100 min-h-screen">
+
+<!-- Top bar -->
+<header class="sticky top-0 z-50 glass bg-gray-950/80 border-b border-gray-800">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-lg bg-brand-600 flex items-center justify-center text-white font-bold text-lg">H</div>
+      <div>
+        <h1 class="text-lg font-semibold leading-tight">House Bot Madrid</h1>
+        <p class="text-xs text-gray-500 leading-tight">Cooperativas &amp; Obra Nueva</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <span id="last-update" class="text-xs text-gray-500"></span>
+      <button onclick="loadAll()" class="p-2 rounded-lg hover:bg-gray-800 transition" title="Refrescar">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+      </button>
+      <button onclick="toggleTheme()" class="p-2 rounded-lg hover:bg-gray-800 transition" title="Tema">
+        <svg id="icon-theme" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- Tabs -->
+<nav class="max-w-7xl mx-auto px-4 sm:px-6 border-b border-gray-800">
+  <div class="flex gap-6 -mb-px" id="tabs">
+    <button class="py-3 text-sm tab-active" data-tab="overview">Resumen</button>
+    <button class="py-3 text-sm text-gray-500 hover:text-gray-300 transition" data-tab="opportunities">Oportunidades</button>
+    <button class="py-3 text-sm text-gray-500 hover:text-gray-300 transition" data-tab="sites">Sitios</button>
+    <button class="py-3 text-sm text-gray-500 hover:text-gray-300 transition" data-tab="forms">Formularios</button>
+    <button class="py-3 text-sm text-gray-500 hover:text-gray-300 transition" data-tab="config">Config</button>
+  </div>
+</nav>
+
+<!-- Content -->
+<main class="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+
+  <!-- OVERVIEW TAB -->
+  <section id="tab-overview" class="fade-in space-y-6">
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4" id="stat-cards"></div>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div class="bg-gray-900 rounded-xl p-5 border border-gray-800">
+        <h3 class="text-sm font-semibold text-gray-400 mb-4">Oportunidades por Zona</h3>
+        <canvas id="chart-zone" height="220"></canvas>
+      </div>
+      <div class="bg-gray-900 rounded-xl p-5 border border-gray-800">
+        <h3 class="text-sm font-semibold text-gray-400 mb-4">Estado de Oportunidades</h3>
+        <canvas id="chart-status" height="220"></canvas>
+      </div>
+    </div>
+    <div class="bg-gray-900 rounded-xl p-5 border border-gray-800">
+      <h3 class="text-sm font-semibold text-gray-400 mb-4">Top Oportunidades</h3>
+      <div id="top-opps"></div>
+    </div>
+  </section>
+
+  <!-- OPPORTUNITIES TAB -->
+  <section id="tab-opportunities" class="fade-in hidden">
+    <div class="flex flex-wrap items-center gap-3 mb-4">
+      <select id="filter-zone" class="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:ring-brand-500 focus:border-brand-500">
+        <option value="">Todas las zonas</option>
+        <option value="norte">Norte</option>
+        <option value="este">Este</option>
+        <option value="oeste">Oeste</option>
+        <option value="todas">Todas</option>
+      </select>
+      <select id="filter-status" class="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:ring-brand-500 focus:border-brand-500">
+        <option value="">Todos los estados</option>
+        <option value="nueva">Nueva</option>
+        <option value="en_curso">En curso</option>
+        <option value="proxima">Proxima</option>
+        <option value="cerrada">Cerrada</option>
+      </select>
+      <span id="opp-count" class="text-sm text-gray-500 ml-auto"></span>
+    </div>
+    <div class="overflow-x-auto rounded-xl border border-gray-800">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-900 text-gray-400 text-xs uppercase tracking-wider">
+          <tr>
+            <th class="px-4 py-3 text-left cursor-pointer hover:text-gray-200" onclick="sortOpps('ai_score')">Score</th>
+            <th class="px-4 py-3 text-left cursor-pointer hover:text-gray-200" onclick="sortOpps('title')">Titulo</th>
+            <th class="px-4 py-3 text-left">Zona</th>
+            <th class="px-4 py-3 text-left">Estado</th>
+            <th class="px-4 py-3 text-left">Precio</th>
+            <th class="px-4 py-3 text-left">Sitio</th>
+            <th class="px-4 py-3 text-left">Link</th>
+          </tr>
+        </thead>
+        <tbody id="opp-table" class="divide-y divide-gray-800"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- SITES TAB -->
+  <section id="tab-sites" class="fade-in hidden">
+    <div class="overflow-x-auto rounded-xl border border-gray-800">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-900 text-gray-400 text-xs uppercase tracking-wider">
+          <tr>
+            <th class="px-4 py-3 text-left">Nombre</th>
+            <th class="px-4 py-3 text-left">Tipo</th>
+            <th class="px-4 py-3 text-left">Zona</th>
+            <th class="px-4 py-3 text-left">Ultima visita</th>
+            <th class="px-4 py-3 text-left">Estado</th>
+            <th class="px-4 py-3 text-left">URL</th>
+          </tr>
+        </thead>
+        <tbody id="sites-table" class="divide-y divide-gray-800"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- FORMS TAB -->
+  <section id="tab-forms" class="fade-in hidden">
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6" id="form-stat-cards"></div>
+    <div class="overflow-x-auto rounded-xl border border-gray-800">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-900 text-gray-400 text-xs uppercase tracking-wider">
+          <tr>
+            <th class="px-4 py-3 text-left">Sitio</th>
+            <th class="px-4 py-3 text-left">Tipo</th>
+            <th class="px-4 py-3 text-left">Estado</th>
+            <th class="px-4 py-3 text-left">Enviado</th>
+            <th class="px-4 py-3 text-left">URL</th>
+          </tr>
+        </thead>
+        <tbody id="forms-table" class="divide-y divide-gray-800"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- CONFIG TAB -->
+  <section id="tab-config" class="fade-in hidden">
+    <div class="bg-gray-900 rounded-xl border border-gray-800 divide-y divide-gray-800" id="config-panel"></div>
+  </section>
+
+</main>
+
+<script>
+const API = '';
+let state = { stats:null, opps:[], sites:[], forms:[], config:null };
+let oppSortKey = 'ai_score', oppSortAsc = false;
+let chartZone = null, chartStatus = null;
+
+const ZONE_COLORS = { norte:'#3b82f6', este:'#10b981', oeste:'#f59e0b', todas:'#8b5cf6' };
+const STATUS_COLORS = { nueva:'#3b82f6', en_curso:'#10b981', proxima:'#f59e0b', cerrada:'#ef4444' };
+const FORM_STATUS_COLORS = { pendiente:'#f59e0b', enviado:'#10b981', error:'#ef4444', omitido:'#6b7280' };
+const ZONE_LABELS = { norte:'Norte', este:'Este', oeste:'Oeste', todas:'Todas' };
+const STATUS_LABELS = { nueva:'Nueva', en_curso:'En curso', proxima:'Proxima', cerrada:'Cerrada' };
+const FORM_STATUS_LABELS = { pendiente:'Pendiente', enviado:'Enviado', error:'Error', omitido:'Omitido' };
+
+// --- Data fetching ---
+async function fetchJSON(url) {
+  const r = await fetch(API + url);
+  if (!r.ok) throw new Error(`${r.status}`);
+  return r.json();
+}
+
+async function loadAll() {
+  try {
+    const [stats, opps, sites, forms, config] = await Promise.all([
+      fetchJSON('/api/stats'),
+      fetchJSON('/api/opportunities'),
+      fetchJSON('/api/sites'),
+      fetchJSON('/api/forms'),
+      fetchJSON('/api/config'),
+    ]);
+    state = { stats, opps, sites, forms, config };
+    render();
+    document.getElementById('last-update').textContent = 'Actualizado: ' + new Date().toLocaleTimeString('es-ES');
+  } catch (e) {
+    console.error('Load failed:', e);
+  }
+}
+
+// --- Rendering ---
+function render() {
+  renderStats();
+  renderCharts();
+  renderTopOpps();
+  renderOppsTable();
+  renderSitesTable();
+  renderFormsTab();
+  renderConfig();
+}
+
+function renderStats() {
+  const s = state.stats; if (!s) return;
+  const cards = [
+    { label:'Sitios activos', value:s.active_sites, icon:'🌐', color:'brand' },
+    { label:'Oportunidades', value:s.total_opportunities, icon:'🏠', color:'blue' },
+    { label:'Formularios', value:s.total_forms, icon:'📋', color:'green' },
+    { label:'Score medio', value:s.avg_score+'/10', icon:'⭐', color:'yellow' },
+    { label:'Top score', value:s.top_score+'/10', icon:'🏆', color:'purple' },
+    { label:'Sitios total', value:s.total_sites, icon:'📡', color:'gray' },
+  ];
+  document.getElementById('stat-cards').innerHTML = cards.map(c => `
+    <div class="bg-gray-900 rounded-xl p-4 border border-gray-800 hover:border-gray-700 transition">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-2xl">${c.icon}</span>
+      </div>
+      <div class="text-2xl font-bold">${c.value}</div>
+      <div class="text-xs text-gray-500 mt-1">${c.label}</div>
+    </div>
+  `).join('');
+}
+
+function renderCharts() {
+  const s = state.stats; if (!s) return;
+
+  if (chartZone) chartZone.destroy();
+  if (chartStatus) chartStatus.destroy();
+
+  const zoneData = s.opportunities_by_zone;
+  const zoneLabels = Object.keys(zoneData).map(k => ZONE_LABELS[k]||k);
+  const zoneValues = Object.values(zoneData);
+  const zoneColors = Object.keys(zoneData).map(k => ZONE_COLORS[k]||'#6b7280');
+
+  chartZone = new Chart(document.getElementById('chart-zone'), {
+    type: 'doughnut',
+    data: { labels:zoneLabels, datasets:[{ data:zoneValues, backgroundColor:zoneColors, borderWidth:0, hoverOffset:8 }] },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins: { legend:{ position:'bottom', labels:{ color:'#9ca3af', padding:16, usePointStyle:true, pointStyleWidth:8 } } },
+      cutout: '65%',
+    }
+  });
+
+  const statusData = s.opportunities_by_status;
+  const statusLabels = Object.keys(statusData).map(k => STATUS_LABELS[k]||k);
+  const statusValues = Object.values(statusData);
+  const statusColors = Object.keys(statusData).map(k => STATUS_COLORS[k]||'#6b7280');
+
+  chartStatus = new Chart(document.getElementById('chart-status'), {
+    type: 'bar',
+    data: { labels:statusLabels, datasets:[{ data:statusValues, backgroundColor:statusColors, borderRadius:6, barThickness:40 }] },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins: { legend:{ display:false } },
+      scales: {
+        x:{ grid:{ display:false }, ticks:{ color:'#9ca3af' } },
+        y:{ grid:{ color:'#1f2937' }, ticks:{ color:'#9ca3af', stepSize:1 }, beginAtZero:true },
+      }
+    }
+  });
+}
+
+function renderTopOpps() {
+  const opps = [...state.opps].sort((a,b) => (b.ai_score||0) - (a.ai_score||0)).slice(0,5);
+  if (!opps.length) {
+    document.getElementById('top-opps').innerHTML = '<p class="text-gray-500 text-sm">Sin oportunidades todavia</p>';
+    return;
+  }
+  const maxScore = 10;
+  document.getElementById('top-opps').innerHTML = opps.map(o => {
+    const pct = ((o.ai_score||0)/maxScore*100);
+    const color = pct >= 70 ? 'bg-green-500' : pct >= 40 ? 'bg-yellow-500' : 'bg-red-500';
+    return `
+    <div class="flex items-center gap-4 py-3 ${o !== opps[opps.length-1] ? 'border-b border-gray-800' : ''}">
+      <div class="w-10 text-center font-bold text-lg ${pct >= 70 ? 'text-green-400' : pct >= 40 ? 'text-yellow-400' : 'text-red-400'}">${o.ai_score||'-'}</div>
+      <div class="flex-1 min-w-0">
+        <div class="font-medium truncate">${esc(o.title)}</div>
+        <div class="text-xs text-gray-500 truncate">${esc(o.description||'')}</div>
+        <div class="mt-1.5 w-full bg-gray-800 rounded-full"><div class="score-bar ${color}" style="width:${pct}%"></div></div>
+      </div>
+      <span class="badge ${zoneBadge(o.zone)}">${ZONE_LABELS[o.zone]||o.zone}</span>
+      <span class="badge ${statusBadge(o.status)}">${STATUS_LABELS[o.status]||o.status}</span>
+      ${o.estimated_price ? `<span class="text-xs text-gray-400 whitespace-nowrap">${esc(o.estimated_price)}</span>` : ''}
+      <a href="${esc(o.url)}" target="_blank" class="text-brand-400 hover:text-brand-300 shrink-0">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+      </a>
+    </div>`;
+  }).join('');
+}
+
+function renderOppsTable() {
+  let data = [...state.opps];
+  const zone = document.getElementById('filter-zone').value;
+  const status = document.getElementById('filter-status').value;
+  if (zone) data = data.filter(o => o.zone === zone);
+  if (status) data = data.filter(o => o.status === status);
+
+  data.sort((a,b) => {
+    let va = a[oppSortKey], vb = b[oppSortKey];
+    if (va == null) va = oppSortKey === 'ai_score' ? -1 : '';
+    if (vb == null) vb = oppSortKey === 'ai_score' ? -1 : '';
+    if (typeof va === 'string') return oppSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+    return oppSortAsc ? va - vb : vb - va;
+  });
+
+  document.getElementById('opp-count').textContent = `${data.length} oportunidades`;
+  document.getElementById('opp-table').innerHTML = data.map(o => `
+    <tr class="hover:bg-gray-900/50 transition">
+      <td class="px-4 py-3 font-bold ${(o.ai_score||0)>=7?'text-green-400':(o.ai_score||0)>=4?'text-yellow-400':'text-gray-500'}">${o.ai_score||'-'}</td>
+      <td class="px-4 py-3">
+        <div class="font-medium">${esc(o.title)}</div>
+        <div class="text-xs text-gray-500 max-w-xs truncate">${esc(o.description||'')}</div>
+      </td>
+      <td class="px-4 py-3"><span class="badge ${zoneBadge(o.zone)}">${ZONE_LABELS[o.zone]||o.zone}</span></td>
+      <td class="px-4 py-3"><span class="badge ${statusBadge(o.status)}">${STATUS_LABELS[o.status]||o.status}</span></td>
+      <td class="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">${esc(o.estimated_price||'-')}</td>
+      <td class="px-4 py-3 text-gray-500 text-xs">${esc(o.site_name||'')}</td>
+      <td class="px-4 py-3"><a href="${esc(o.url)}" target="_blank" class="text-brand-400 hover:underline text-xs">Ver</a></td>
+    </tr>
+  `).join('') || '<tr><td colspan="7" class="px-4 py-8 text-center text-gray-500">Sin oportunidades</td></tr>';
+}
+
+function renderSitesTable() {
+  document.getElementById('sites-table').innerHTML = state.sites.map(s => `
+    <tr class="hover:bg-gray-900/50 transition">
+      <td class="px-4 py-3 font-medium">${esc(s.name)}</td>
+      <td class="px-4 py-3"><span class="badge ${typeBadge(s.site_type)}">${s.site_type}</span></td>
+      <td class="px-4 py-3"><span class="badge ${zoneBadge(s.zone)}">${ZONE_LABELS[s.zone]||s.zone}</span></td>
+      <td class="px-4 py-3 text-gray-400 text-xs">${s.last_visited ? new Date(s.last_visited).toLocaleString('es-ES',{dateStyle:'short',timeStyle:'short'}) : 'Nunca'}</td>
+      <td class="px-4 py-3">${s.active ? '<span class="w-2 h-2 rounded-full bg-green-500 inline-block"></span> Activo' : '<span class="w-2 h-2 rounded-full bg-gray-600 inline-block"></span> Inactivo'}</td>
+      <td class="px-4 py-3"><a href="${esc(s.url)}" target="_blank" class="text-brand-400 hover:underline text-xs truncate block max-w-[200px]">${esc(s.url.replace(/^https?:\/\/(www\.)?/,''))}</a></td>
+    </tr>
+  `).join('') || '<tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">Sin sitios</td></tr>';
+}
+
+function renderFormsTab() {
+  const s = state.stats;
+  if (s) {
+    const fb = s.forms_by_status;
+    const cards = [
+      { label:'Pendientes', value:fb.pendiente||0, color:'text-yellow-400', bg:'bg-yellow-500/10' },
+      { label:'Enviados', value:fb.enviado||0, color:'text-green-400', bg:'bg-green-500/10' },
+      { label:'Errores', value:fb.error||0, color:'text-red-400', bg:'bg-red-500/10' },
+      { label:'Omitidos', value:fb.omitido||0, color:'text-gray-400', bg:'bg-gray-500/10' },
+    ];
+    document.getElementById('form-stat-cards').innerHTML = cards.map(c => `
+      <div class="rounded-xl p-4 border border-gray-800 ${c.bg}">
+        <div class="text-2xl font-bold ${c.color}">${c.value}</div>
+        <div class="text-xs text-gray-500 mt-1">${c.label}</div>
+      </div>
+    `).join('');
+  }
+
+  document.getElementById('forms-table').innerHTML = state.forms.map(f => `
+    <tr class="hover:bg-gray-900/50 transition">
+      <td class="px-4 py-3 font-medium">${esc(f.site_name||'')}</td>
+      <td class="px-4 py-3 text-gray-400 capitalize">${f.form_type}</td>
+      <td class="px-4 py-3"><span class="badge ${formBadge(f.status)}">${FORM_STATUS_LABELS[f.status]||f.status}</span></td>
+      <td class="px-4 py-3 text-gray-400 text-xs">${f.submitted_at ? new Date(f.submitted_at).toLocaleString('es-ES',{dateStyle:'short',timeStyle:'short'}) : '-'}</td>
+      <td class="px-4 py-3"><a href="${esc(f.form_url)}" target="_blank" class="text-brand-400 hover:underline text-xs truncate block max-w-[200px]">${esc(f.form_url.replace(/^https?:\/\/(www\.)?/,''))}</a></td>
+    </tr>
+  `).join('') || '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-500">Sin formularios</td></tr>';
+}
+
+function renderConfig() {
+  const c = state.config; if (!c) return;
+  const rows = [
+    { label:'Modelo AI', value:c.gemini_model, icon:'🤖' },
+    { label:'Zonas', value:c.zones.join(', '), icon:'📍' },
+    { label:'Intervalo scraping', value:`${c.scrape_interval_hours}h`, icon:'🔄' },
+    { label:'Intervalo discovery', value:`${c.discovery_interval_hours}h`, icon:'🔍' },
+    { label:'Intervalo formularios', value:`${c.form_fill_interval_hours}h`, icon:'📝' },
+    { label:'Timeout Playwright', value:`${c.playwright_timeout_ms/1000}s`, icon:'⏱️' },
+  ];
+  document.getElementById('config-panel').innerHTML = rows.map(r => `
+    <div class="flex items-center justify-between px-5 py-4">
+      <div class="flex items-center gap-3">
+        <span class="text-xl">${r.icon}</span>
+        <span class="text-sm text-gray-400">${r.label}</span>
+      </div>
+      <span class="text-sm font-medium">${r.value}</span>
+    </div>
+  `).join('');
+}
+
+// --- Helpers ---
+function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+
+function zoneBadge(z) {
+  const m = { norte:'bg-blue-500/15 text-blue-400', este:'bg-emerald-500/15 text-emerald-400', oeste:'bg-amber-500/15 text-amber-400', todas:'bg-purple-500/15 text-purple-400' };
+  return m[z] || 'bg-gray-500/15 text-gray-400';
+}
+function statusBadge(s) {
+  const m = { nueva:'bg-blue-500/15 text-blue-400', en_curso:'bg-emerald-500/15 text-emerald-400', proxima:'bg-amber-500/15 text-amber-400', cerrada:'bg-red-500/15 text-red-400' };
+  return m[s] || 'bg-gray-500/15 text-gray-400';
+}
+function formBadge(s) {
+  const m = { pendiente:'bg-amber-500/15 text-amber-400', enviado:'bg-emerald-500/15 text-emerald-400', error:'bg-red-500/15 text-red-400', omitido:'bg-gray-500/15 text-gray-400' };
+  return m[s] || 'bg-gray-500/15 text-gray-400';
+}
+function typeBadge(t) {
+  const m = { cooperativa:'bg-purple-500/15 text-purple-400', constructora:'bg-cyan-500/15 text-cyan-400', portal:'bg-gray-500/15 text-gray-400' };
+  return m[t] || 'bg-gray-500/15 text-gray-400';
+}
+
+function sortOpps(key) {
+  if (oppSortKey === key) oppSortAsc = !oppSortAsc;
+  else { oppSortKey = key; oppSortAsc = false; }
+  renderOppsTable();
+}
+
+// --- Tabs ---
+document.getElementById('tabs').addEventListener('click', e => {
+  const btn = e.target.closest('[data-tab]'); if (!btn) return;
+  document.querySelectorAll('[data-tab]').forEach(b => { b.classList.remove('tab-active'); b.classList.add('text-gray-500'); });
+  btn.classList.add('tab-active'); btn.classList.remove('text-gray-500');
+  document.querySelectorAll('[id^="tab-"]').forEach(s => s.classList.add('hidden'));
+  document.getElementById('tab-'+btn.dataset.tab).classList.remove('hidden');
+});
+
+// --- Filters ---
+document.getElementById('filter-zone').addEventListener('change', renderOppsTable);
+document.getElementById('filter-status').addEventListener('change', renderOppsTable);
+
+// --- Theme ---
+function toggleTheme() {
+  document.documentElement.classList.toggle('dark');
+  const isDark = document.documentElement.classList.contains('dark');
+  document.body.className = isDark ? 'bg-gray-950 text-gray-100 min-h-screen' : 'bg-gray-50 text-gray-900 min-h-screen';
+}
+
+// --- Init ---
+loadAll();
+setInterval(loadAll, 60000);
+</script>
+</body>
+</html>

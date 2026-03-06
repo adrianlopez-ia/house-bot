@@ -35,22 +35,40 @@ def _setup_logging() -> None:
     )
 
 
-# ── Health-check HTTP server (keeps Render alive) ─────────────────────
+# ── Web server (dashboard + API + health check) ───────────────────────
 
 async def _health(_request: web.Request) -> web.Response:
     return web.Response(text="OK")
 
 
-async def _start_health_server() -> web.AppRunner:
+async def _start_web_server(container: "_Container") -> web.AppRunner:
+    from pathlib import Path
+    from web.api import build_api_routes
+
     app = web.Application()
-    app.router.add_get("/", _health)
     app.router.add_get("/health", _health)
+
+    api_routes = build_api_routes(container.repo, container.settings)
+    app.router.add_routes(api_routes)
+
+    static_dir = Path(__file__).parent / "web" / "static"
+    if static_dir.is_dir():
+        app.router.add_static("/static", static_dir)
+        index_html = static_dir / "index.html"
+
+        async def _serve_index(_req: web.Request) -> web.FileResponse:
+            return web.FileResponse(index_html)
+
+        app.router.add_get("/", _serve_index)
+    else:
+        app.router.add_get("/", _health)
+
     runner = web.AppRunner(app)
     await runner.setup()
     port = int(os.environ.get("PORT", "10000"))
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
-    logger.info("Health server listening on port %d", port)
+    logger.info("Web server listening on port %d", port)
     return runner
 
 
@@ -170,11 +188,11 @@ async def main() -> None:
             f"Missing: {', '.join(missing)}"
         )
 
-    health_runner = await _start_health_server()
-
     container = _Container(settings)
     await container.startup()
     logger.info("All services started")
+
+    web_runner = await _start_web_server(container)
 
     s = settings
     scheduler = AsyncIOScheduler()
@@ -213,7 +231,7 @@ async def main() -> None:
     logger.info("Shutting down...")
     scheduler.shutdown(wait=False)
     await container.shutdown()
-    await health_runner.cleanup()
+    await web_runner.cleanup()
     logger.info("Shutdown complete")
 
 
