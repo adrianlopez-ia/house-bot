@@ -1,15 +1,14 @@
 """REST API endpoints for the dashboard."""
 from __future__ import annotations
 
+import asyncio
 import dataclasses
-import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from aiohttp import web
 
 if TYPE_CHECKING:
-    from db.repository import Repository
-    from config import Settings
+    pass
 
 
 def _json(data: object, status: int = 200) -> web.Response:
@@ -26,7 +25,12 @@ def _serialize(obj: object) -> dict:
     return {}
 
 
-def build_api_routes(repo: "Repository", settings: "Settings") -> web.RouteTableDef:
+_running_actions: dict[str, bool] = {}
+
+
+def build_api_routes(container: Any) -> web.RouteTableDef:
+    repo = container.repo
+    settings = container.settings
     routes = web.RouteTableDef()
 
     @routes.get("/api/stats")
@@ -36,9 +40,9 @@ def build_api_routes(repo: "Repository", settings: "Settings") -> web.RouteTable
         forms = await repo.get_forms()
 
         active_sites = [s for s in sites if s.active]
-        by_zone = {}
-        by_status = {}
-        scores = []
+        by_zone: dict[str, int] = {}
+        by_status: dict[str, int] = {}
+        scores: list[float] = []
         for o in opps:
             z = o.zone.value
             by_zone[z] = by_zone.get(z, 0) + 1
@@ -47,7 +51,7 @@ def build_api_routes(repo: "Repository", settings: "Settings") -> web.RouteTable
             if o.ai_score is not None:
                 scores.append(o.ai_score)
 
-        form_by_status = {}
+        form_by_status: dict[str, int] = {}
         for f in forms:
             st = f.status.value
             form_by_status[st] = form_by_status.get(st, 0) + 1
@@ -62,25 +66,22 @@ def build_api_routes(repo: "Repository", settings: "Settings") -> web.RouteTable
             "opportunities_by_zone": by_zone,
             "opportunities_by_status": by_status,
             "forms_by_status": form_by_status,
+            "running_actions": {k: v for k, v in _running_actions.items() if v},
         })
 
     @routes.get("/api/opportunities")
     async def opportunities(req: web.Request) -> web.Response:
         opps = await repo.get_opportunities()
+        site_map = {s.id: s.name for s in await repo.get_all_sites()}
         data = []
         for o in opps:
             d = _serialize(o)
-            d["site_name"] = ""
+            d["site_name"] = site_map.get(d.get("site_id"), "")
             data.append(d)
-
-        sites = {s.id: s.name for s in await repo.get_all_sites()}
-        for d in data:
-            d["site_name"] = sites.get(d.get("site_id"), "")
 
         zone = req.query.get("zone")
         if zone:
             data = [d for d in data if d.get("zone") == zone]
-
         status = req.query.get("status")
         if status:
             data = [d for d in data if d.get("status") == status]
@@ -89,17 +90,15 @@ def build_api_routes(repo: "Repository", settings: "Settings") -> web.RouteTable
 
     @routes.get("/api/sites")
     async def sites(_req: web.Request) -> web.Response:
-        all_sites = await repo.get_all_sites()
-        return _json([_serialize(s) for s in all_sites])
+        return _json([_serialize(s) for s in await repo.get_all_sites()])
 
     @routes.get("/api/forms")
     async def forms(_req: web.Request) -> web.Response:
-        all_forms = await repo.get_forms()
+        site_map = {s.id: s.name for s in await repo.get_all_sites()}
         data = []
-        sites = {s.id: s.name for s in await repo.get_all_sites()}
-        for f in all_forms:
+        for f in await repo.get_forms():
             d = _serialize(f)
-            d["site_name"] = sites.get(d.get("site_id"), "")
+            d["site_name"] = site_map.get(d.get("site_id"), "")
             data.append(d)
         return _json(data)
 
@@ -113,5 +112,65 @@ def build_api_routes(repo: "Repository", settings: "Settings") -> web.RouteTable
             "form_fill_interval_hours": settings.form_fill_interval_hours,
             "playwright_timeout_ms": settings.playwright_timeout_ms,
         })
+
+    # ── Action endpoints (mirror Telegram commands) ────────────────────
+
+    async def _run_action(name: str, coro: Any) -> dict:
+        if _running_actions.get(name):
+            return {"status": "already_running", "action": name}
+        _running_actions[name] = True
+        try:
+            result = await coro
+            return {"status": "ok", "action": name, "result": result}
+        except Exception as exc:
+            return {"status": "error", "action": name, "error": str(exc)}
+        finally:
+            _running_actions[name] = False
+
+    @routes.post("/api/actions/discover")
+    async def action_discover(_req: web.Request) -> web.Response:
+        async def _do() -> dict:
+            await container.discovery.load_seeds()
+            new = await container.discovery.discover()
+            return {"new_sites": len(new)}
+        r = await _run_action("discover", _do())
+        return _json(r)
+
+    @routes.post("/api/actions/scrape")
+    async def action_scrape(_req: web.Request) -> web.Response:
+        async def _do() -> dict:
+            s = await container.scraper.analyze_all()
+            await container.notifier.send_new_alerts()
+            return {
+                "sites_analyzed": s.sites_analyzed,
+                "opportunities": s.opportunities_found,
+                "forms": s.forms_found,
+                "errors": s.errors,
+            }
+        r = await _run_action("scrape", _do())
+        return _json(r)
+
+    @routes.post("/api/actions/fill-forms")
+    async def action_fill(_req: web.Request) -> web.Response:
+        async def _do() -> dict:
+            r = await container.forms.fill_pending()
+            return {"filled": r.filled, "errors": r.errors, "skipped": r.skipped}
+        r = await _run_action("fill-forms", _do())
+        return _json(r)
+
+    @routes.post("/api/actions/full-search")
+    async def action_full(_req: web.Request) -> web.Response:
+        async def _do() -> dict:
+            await container.discovery.load_seeds()
+            new = await container.discovery.discover()
+            s = await container.scraper.analyze_all()
+            await container.notifier.send_new_alerts()
+            return {
+                "new_sites": len(new),
+                "sites_analyzed": s.sites_analyzed,
+                "opportunities": s.opportunities_found,
+            }
+        r = await _run_action("full-search", _do())
+        return _json(r)
 
     return routes

@@ -48,7 +48,7 @@ async def _start_web_server(container: "_Container") -> web.AppRunner:
     app = web.Application()
     app.router.add_get("/health", _health)
 
-    api_routes = build_api_routes(container.repo, container.settings)
+    api_routes = build_api_routes(container)
     app.router.add_routes(api_routes)
 
     static_dir = Path(__file__).parent / "web" / "static"
