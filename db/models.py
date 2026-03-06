@@ -81,14 +81,23 @@ class Opportunity:
     id: Optional[int] = None
 
     def summary(self) -> str:
+        safe_title = _escape_md(self.title)
         parts = [f"Zona: {self.zone.value} | Estado: {self.status.value}"]
         if self.estimated_price:
-            parts.append(f"Precio: {self.estimated_price}")
+            parts.append(f"Precio: {_escape_md(self.estimated_price)}")
         if self.ai_score is not None:
             parts.append(f"Puntuacion: {self.ai_score}/10")
         meta = " | ".join(parts)
-        desc = self.description[:200]
-        return f"*{self.title}*\n{meta}\n{desc}\n[Ver mas]({self.url})"
+        desc = _escape_md(self.description[:200])
+        safe_url = self.url.replace(")", "%29")
+        return f"*{safe_title}*\n{meta}\n{desc}\n[Ver mas]({safe_url})"
+
+
+def _escape_md(text: str) -> str:
+    """Escape Telegram MarkdownV1 special characters inside regular text."""
+    for ch in ("_", "*", "`", "["):
+        text = text.replace(ch, f"\\{ch}")
+    return text
 
 
 @dataclass(frozen=True)

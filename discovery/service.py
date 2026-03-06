@@ -19,10 +19,24 @@ from exceptions import DiscoveryError
 logger = logging.getLogger(__name__)
 
 _EXCLUDED_DOMAINS = frozenset({
-    "youtube.com", "facebook.com", "twitter.com", "instagram.com",
-    "linkedin.com", "tiktok.com", "reddit.com", "wikipedia.org",
-    "amazon.es", "amazon.com",
+    "youtube.com", "facebook.com", "twitter.com", "x.com",
+    "instagram.com", "linkedin.com", "tiktok.com", "reddit.com",
+    "wikipedia.org", "amazon.es", "amazon.com", "google.com",
+    "bing.com", "yahoo.com", "whatsapp.com", "web.whatsapp.com",
+    "mediamarkt.es", "elcorteingles.es", "groupon.es", "lidl.es",
+    "tiendeo.com", "poki.com", "gry.pl", "bab.la", "rae.es",
+    "wordreference.com", "thefreedictionary.com", "wiktionary.org",
+    "scribd.com", "zhihu.com", "se-escribe.com",
 })
+
+_REQUIRED_KEYWORDS = frozenset({
+    "vivienda", "cooperativa", "constructora", "obra nueva", "promocion",
+    "piso", "casa", "inmobiliaria", "residencial", "urbanizacion",
+    "madrid", "alcobendas", "torrejon", "coslada", "rivas",
+    "pozuelo", "majadahonda", "boadilla", "vallecas", "san sebastian",
+})
+
+_ES_TLDS = (".es", ".com", ".org", ".net", ".eu")
 
 
 class DiscoveryService:
@@ -55,13 +69,17 @@ class DiscoveryService:
                 if domain in _EXCLUDED_DOMAINS or domain in known_domains:
                     continue
 
+                title = hit.get("title", "")
+                body = hit.get("body", "")
+                if not _is_relevant(url, title, body):
+                    logger.debug("Filtered irrelevant: %s", url)
+                    continue
+
                 site = Site(
                     url=url,
-                    name=hit.get("title", domain)[:120],
+                    name=title[:120] or domain,
                     zone=_parse_zone(q.get("zone", "")),
-                    site_type=_guess_type(
-                        hit.get("title", ""), hit.get("body", ""),
-                    ),
+                    site_type=_guess_type(title, body),
                 )
                 site_id = await self._repo.upsert_site(site)
                 new_sites.append(Site(
@@ -75,11 +93,26 @@ class DiscoveryService:
         return new_sites
 
 
+def _is_relevant(url: str, title: str, body: str) -> bool:
+    """Filter out results that are clearly not Spanish housing-related."""
+    parsed = urlparse(url)
+    domain = parsed.netloc.lower()
+    tld = "." + domain.rsplit(".", 1)[-1] if "." in domain else ""
+
+    if tld not in _ES_TLDS:
+        return False
+
+    text = f"{title} {body}".lower()
+    return any(kw in text for kw in _REQUIRED_KEYWORDS)
+
+
 async def _search_ddg(query: str, max_results: int = 10) -> list[dict]:
     def _run() -> list[dict]:
         try:
             with DDGS() as ddgs:
-                return list(ddgs.text(query, region="es-es", max_results=max_results))
+                return list(ddgs.text(
+                    query, region="es-es", max_results=max_results,
+                ))
         except Exception as exc:
             logger.warning("DDG search failed for '%s': %s", query, exc)
             return []

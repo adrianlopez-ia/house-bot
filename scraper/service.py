@@ -5,6 +5,7 @@ All external dependencies are injected via the constructor.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from ai.protocols import AIAnalyzer
@@ -55,6 +56,7 @@ class ScraperService:
             opp_count += 1
             logger.info("Opportunity: %s (score=%s)", opp.title, opp.ai_score)
 
+        await asyncio.sleep(3)
         raw_forms = await self._ai.detect_forms(result.html, site.url)
         form_count = 0
         for fdata in raw_forms:
@@ -75,7 +77,7 @@ class ScraperService:
         sites = await self._repo.get_active_sites()
         total_opps = total_forms = errors = 0
 
-        for site in sites:
+        for idx, site in enumerate(sites):
             try:
                 result = await self.analyze_site(site)
                 total_opps += result.opportunities
@@ -85,6 +87,9 @@ class ScraperService:
             except Exception as exc:
                 logger.error("Error analyzing %s: %s", site.url, exc)
                 errors += 1
+
+            if idx < len(sites) - 1:
+                await asyncio.sleep(4)
 
         summary = AnalysisSummary(
             sites_analyzed=len(sites),

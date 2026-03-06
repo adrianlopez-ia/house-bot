@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from typing import Any
 
 from google import genai
@@ -17,6 +18,18 @@ _MAX_PAGE_CHARS = 15_000
 _MAX_HTML_CHARS = 12_000
 _MAX_CONTEXT_CHARS = 2_000
 
+_MAX_RETRIES = 3
+_BASE_BACKOFF_SECS = 10.0
+_RETRY_DELAY_RE = re.compile(r"retryDelay.*?(\d+)")
+
+
+def _parse_retry_delay(error_text: str) -> float:
+    """Extract the retry delay from a Gemini 429 error, or use a default."""
+    match = _RETRY_DELAY_RE.search(error_text)
+    if match:
+        return max(float(match.group(1)), _BASE_BACKOFF_SECS)
+    return _BASE_BACKOFF_SECS
+
 
 class GeminiAnalyzer:
     """Concrete :class:`AIAnalyzer` backed by Google Gemini."""
@@ -26,16 +39,31 @@ class GeminiAnalyzer:
         self._model = model
 
     async def _generate(self, prompt: str) -> str:
-        def _call() -> str:
-            response = self._client.models.generate_content(
-                model=self._model, contents=prompt,
-            )
-            return response.text
+        last_exc: Exception | None = None
 
-        try:
-            return await asyncio.to_thread(_call)
-        except Exception as exc:
-            raise AIAnalysisError(f"Gemini generation failed: {exc}") from exc
+        for attempt in range(_MAX_RETRIES + 1):
+            def _call() -> str:
+                response = self._client.models.generate_content(
+                    model=self._model, contents=prompt,
+                )
+                return response.text
+
+            try:
+                return await asyncio.to_thread(_call)
+            except Exception as exc:
+                last_exc = exc
+                err = str(exc)
+                if "429" in err and attempt < _MAX_RETRIES:
+                    wait = _parse_retry_delay(err) + attempt * 5
+                    logger.warning(
+                        "Rate-limited (attempt %d/%d), waiting %.0fs",
+                        attempt + 1, _MAX_RETRIES, wait,
+                    )
+                    await asyncio.sleep(wait)
+                    continue
+                break
+
+        raise AIAnalysisError(f"Gemini generation failed: {last_exc}") from last_exc
 
     # ── protocol methods ───────────────────────────────────────────────
 

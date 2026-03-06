@@ -107,12 +107,18 @@ class NotifierService:
                     parse_mode=ParseMode.MARKDOWN,
                     disable_web_page_preview=True,
                 )
-            except Exception as exc:
-                logger.error(
-                    "Failed to send message to chat %s: %s. "
-                    "Use /chatid to get your correct ID.",
-                    self._chat_id, exc,
-                )
+            except Exception:
+                try:
+                    await self._app.bot.send_message(
+                        chat_id=self._chat_id, text=chunk,
+                        disable_web_page_preview=True,
+                    )
+                except Exception as exc:
+                    logger.error(
+                        "Failed to send message to chat %s: %s. "
+                        "Use /chatid to get your correct ID.",
+                        self._chat_id, exc,
+                    )
 
     async def send_new_alerts(self) -> int:
         opps = await self._repo.get_opportunities(notified=False)
@@ -166,10 +172,15 @@ class NotifierService:
 
     async def _reply(self, update: Update, text: str) -> None:
         for chunk in _split(text):
-            await update.message.reply_text(
-                chunk, parse_mode=ParseMode.MARKDOWN,
-                disable_web_page_preview=True,
-            )
+            try:
+                await update.message.reply_text(
+                    chunk, parse_mode=ParseMode.MARKDOWN,
+                    disable_web_page_preview=True,
+                )
+            except Exception:
+                await update.message.reply_text(
+                    chunk, disable_web_page_preview=True,
+                )
 
     async def _h_start(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         await self._reply(
