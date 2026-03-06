@@ -134,8 +134,6 @@ async def _job_discover(c: _Container) -> None:
         if new_sites:
             names = "\n".join(f"  - {s.name}" for s in new_sites[:10])
             await c.notifier.send(f"*Nuevos sitios descubiertos:* {len(new_sites)}\n{names}")
-        await c.scraper.analyze_all()
-        await c.notifier.send_new_alerts()
         logger.info("JOB discover done: %d new", len(new_sites))
     except Exception as exc:
         logger.error("JOB discover failed: %s", exc)
@@ -167,10 +165,8 @@ async def _initial_run(c: _Container) -> None:
     logger.info("Initial run start")
     await c.discovery.load_seeds()
     await c.discovery.discover()
-    await c.scraper.analyze_all()
     await c.notifier.send_new_alerts()
-    await c.forms.fill_pending()
-    logger.info("Initial run complete")
+    logger.info("Initial run complete (scrape deferred to scheduled job)")
 
 
 # ── Entry point ────────────────────────────────────────────────────────

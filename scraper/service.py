@@ -2,11 +2,13 @@
 
 Coordinates browser scraping, AI analysis, and persistence for each site.
 Uses a single AI call per site to conserve API quota.
+Includes a global lock to prevent concurrent scrape runs.
 """
 from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timezone, timedelta
 
 from ai.protocols import AIAnalyzer
 from db.models import (
@@ -20,7 +22,9 @@ from scraper.browser import BrowserManager
 logger = logging.getLogger(__name__)
 
 _MIN_CONTENT_CHARS = 20
-_DELAY_BETWEEN_SITES_SECS = 8
+_DELAY_BETWEEN_SITES_SECS = 10
+_MAX_SITES_PER_CYCLE = 10
+_SKIP_IF_VISITED_WITHIN_HOURS = 6
 
 
 class ScraperService:
@@ -33,6 +37,7 @@ class ScraperService:
         self._repo = repo
         self._ai = ai
         self._browser = browser
+        self._lock = asyncio.Lock()
 
     async def analyze_site(self, site: Site) -> AnalysisResult:
         result = await self._browser.scrape(site.url)
@@ -86,9 +91,35 @@ class ScraperService:
         return AnalysisResult(opportunities=opp_count, forms=form_count)
 
     async def analyze_all(self) -> AnalysisSummary:
-        sites = await self._repo.get_active_sites()
-        total_opps = total_forms = errors = 0
+        if self._lock.locked():
+            logger.warning("Scrape already running, skipping")
+            return AnalysisSummary()
 
+        async with self._lock:
+            return await self._analyze_all_locked()
+
+    async def _analyze_all_locked(self) -> AnalysisSummary:
+        all_sites = await self._repo.get_active_sites()
+        cutoff = (
+            datetime.now(timezone.utc)
+            - timedelta(hours=_SKIP_IF_VISITED_WITHIN_HOURS)
+        ).isoformat()
+
+        sites = []
+        for s in all_sites:
+            if s.last_visited and s.last_visited > cutoff:
+                continue
+            sites.append(s)
+            if len(sites) >= _MAX_SITES_PER_CYCLE:
+                break
+
+        if not sites:
+            logger.info("All sites recently visited, nothing to analyze")
+            return AnalysisSummary()
+
+        logger.info("Analyzing %d/%d sites (budget: %d/cycle)", len(sites), len(all_sites), _MAX_SITES_PER_CYCLE)
+
+        total_opps = total_forms = errors = 0
         for idx, site in enumerate(sites):
             try:
                 result = await self.analyze_site(site)

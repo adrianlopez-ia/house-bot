@@ -44,16 +44,16 @@ class Settings(BaseSettings):
     screenshots_dir: Path = _BASE_DIR / "screenshots"
 
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-2.5-flash-lite"
 
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
 
     zones: str = "norte,este,oeste"
 
-    scrape_interval_hours: int = 6
+    scrape_interval_hours: int = 8
     discovery_interval_hours: int = 24
-    form_fill_interval_hours: int = 12
+    form_fill_interval_hours: int = 24
 
     playwright_timeout_ms: int = 30_000
     max_page_text_chars: int = 50_000
