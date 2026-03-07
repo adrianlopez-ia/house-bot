@@ -42,9 +42,20 @@ _COOKIE_SELECTORS = (
 _STRIP_JS = """\
 (() => {
     document.querySelectorAll(
-        'script, style, noscript, iframe, svg, header nav, footer'
+        'script, style, noscript, iframe, svg'
     ).forEach(el => el.remove());
     return document.body ? document.body.innerText : '';
+})()
+"""
+
+_SCROLL_JS = """\
+(async () => {
+    const delay = ms => new Promise(r => setTimeout(r, ms));
+    for (let i = 0; i < 3; i++) {
+        window.scrollBy(0, window.innerHeight);
+        await delay(400);
+    }
+    window.scrollTo(0, 0);
 })()
 """
 
@@ -90,8 +101,10 @@ class BrowserManager:
         try:
             page = await ctx.new_page()
             await page.goto(url, wait_until="domcontentloaded", timeout=self._timeout_ms)
-            await page.wait_for_timeout(2000)
+            await page.wait_for_timeout(2500)
             await dismiss_cookies(page)
+            await page.evaluate(_SCROLL_JS)
+            await page.wait_for_timeout(1500)
 
             title = await page.title()
             text = await page.evaluate(_STRIP_JS)

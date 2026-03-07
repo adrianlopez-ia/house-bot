@@ -35,6 +35,11 @@ _REQUIRED_KEYWORDS = frozenset({
     "piso", "casa", "inmobiliaria", "residencial", "urbanizacion",
     "madrid", "alcobendas", "torrejon", "coslada", "rivas",
     "pozuelo", "majadahonda", "boadilla", "vallecas", "san sebastian",
+    "tres cantos", "colmenar", "las rozas", "villanueva",
+    "alcala de henares", "arganda", "villaviciosa",
+    "promotora", "pisos nuevos", "vpo", "vppl", "vivienda protegida",
+    "entrega", "dormitorio", "habitacion", "desde", "precio",
+    "comprar piso", "obra nueva madrid",
 })
 
 _ES_TLDS = (".es", ".com", ".org", ".net", ".eu")
@@ -117,7 +122,7 @@ def _is_relevant(url: str, title: str, body: str) -> bool:
     return any(kw in text for kw in _REQUIRED_KEYWORDS)
 
 
-async def _search_ddg(query: str, max_results: int = 10) -> list[dict]:
+async def _search_ddg(query: str, max_results: int = 25) -> list[dict]:
     def _run() -> list[dict]:
         try:
             with DDGS() as ddgs:

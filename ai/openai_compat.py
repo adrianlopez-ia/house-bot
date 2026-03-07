@@ -17,9 +17,9 @@ from exceptions import AIAnalysisError
 
 logger = logging.getLogger(__name__)
 
-_MAX_PAGE_CHARS = 12_000
-_MAX_HTML_CHARS = 8_000
-_MAX_CONTEXT_CHARS = 2_000
+_MAX_PAGE_CHARS = 24_000
+_MAX_HTML_CHARS = 12_000
+_MAX_CONTEXT_CHARS = 3_000
 
 _MAX_RETRIES = 4
 _BASE_BACKOFF_SECS = 5.0
@@ -75,19 +75,18 @@ class OpenAICompatAnalyzer:
         self, text: str, url: str, zone: str,
     ) -> list[dict[str, Any]]:
         prompt = (
-            "Eres un experto en mercado inmobiliario de Madrid.\n"
-            "Analiza el siguiente contenido de una pagina web y extrae TODAS las "
-            "oportunidades de vivienda (cooperativas, obra nueva, promociones).\n\n"
-            f"URL: {url}\nZona objetivo: {zone}\n\n"
-            "Para CADA oportunidad devuelve un JSON con:\n"
-            '- "title": nombre del proyecto\n'
-            '- "description": descripcion breve (max 300 chars)\n'
-            '- "estimated_price": precio estimado o rango (string o null)\n'
-            '- "status": "nueva"|"en_curso"|"proxima"|"cerrada"\n'
-            '- "ai_score": interes 1-10 (10 = muy interesante)\n'
-            '- "url": URL directa a la oportunidad o la de la pagina\n\n'
-            "Responde SOLO con un array JSON. Sin oportunidades -> [].\n\n"
-            f"Contenido:\n{text[:_MAX_PAGE_CHARS]}"
+            "Eres un analista experto del mercado inmobiliario de Madrid.\n"
+            "Extrae TODAS las oportunidades de vivienda del siguiente contenido.\n"
+            "Busca pisos, viviendas, promociones, cooperativas, obra nueva, residenciales.\n"
+            "Extrae CADA proyecto como oportunidad separada, incluso con info parcial.\n\n"
+            f"URL: {url}\nZona: {zone or 'todas'}\n\n"
+            "Para CADA oportunidad devuelve JSON con:\n"
+            '- "title", "description" (max 300 chars), "estimated_price" (string o null),\n'
+            '  "status" ("nueva"|"en_curso"|"proxima"|"cerrada"), "ai_score" (1-10),\n'
+            '  "url", "house_type", "bedrooms", "sqm", "amenities", "protection_type",\n'
+            '  "availability", "project_date"\n\n'
+            "Responde SOLO con un array JSON. Sin ```.\n\n"
+            f"=== CONTENIDO ===\n{text[:_MAX_PAGE_CHARS]}"
         )
         try:
             raw = await self._generate(prompt)
@@ -124,39 +123,50 @@ class OpenAICompatAnalyzer:
         preference_hint: str = "",
     ) -> dict[str, Any]:
         """Single API call that extracts both opportunities and forms."""
-        pref_block = f"\n\n{preference_hint}\n" if preference_hint else ""
+        pref_block = f"\n\nPREFERENCIAS DEL USUARIO (puntua mas alto lo que encaje):\n{preference_hint}\n" if preference_hint else ""
         prompt = (
-            "Eres un experto en mercado inmobiliario de Madrid.\n"
-            "Analiza el contenido de esta pagina web y haz DOS cosas:\n\n"
-            "1) Extrae TODAS las oportunidades de vivienda "
-            "(cooperativas, obra nueva, promociones)\n"
-            "2) Detecta formularios de contacto, inscripcion o "
-            "solicitud de informacion\n\n"
-            f"URL: {url}\nZona objetivo: {zone}\n"
+            "Eres un analista experto del mercado inmobiliario de Madrid.\n"
+            "Tu trabajo es extraer TODAS las oportunidades de vivienda de esta pagina web.\n\n"
+            "IMPORTANTE:\n"
+            "- Busca CUALQUIER mencion a pisos, viviendas, promociones, proyectos residenciales, cooperativas, obra nueva\n"
+            "- Si la pagina lista varias promociones o proyectos, extrae CADA UNO como oportunidad separada\n"
+            "- Si solo hay informacion general de UNA promocion, extrae esa como oportunidad\n"
+            "- Incluso si la informacion es parcial (sin precio, sin m2), extraela igual\n"
+            "- Busca tambien formularios de contacto, inscripcion o solicitud de informacion\n"
+            "- NO devuelvas arrays vacios si hay CUALQUIER mencion a vivienda en el contenido\n\n"
+            f"URL: {url}\n"
+            f"Zona objetivo: {zone or 'todas'}\n"
             f"{pref_block}\n"
-            "Responde con UN SOLO JSON objeto con dos claves:\n\n"
-            '"opportunities": array donde cada elemento tiene:\n'
-            '  - "title": nombre del proyecto\n'
-            '  - "description": descripcion breve (max 300 chars)\n'
-            '  - "estimated_price": precio o rango (string o null)\n'
-            '  - "status": "nueva"|"en_curso"|"proxima"|"cerrada"\n'
-            '  - "ai_score": interes 1-10 (si hay preferencias, puntua mas alto las que encajen)\n'
-            '  - "url": URL directa\n'
-            '  - "house_type": "piso"|"chalet"|"adosado"|"duplex"|"atico"|"estudio"|"otro" o null\n'
-            '  - "bedrooms": numero de habitaciones (int o null)\n'
-            '  - "sqm": metros cuadrados (float o null)\n'
-            '  - "amenities": extras separados por coma (garaje,piscina,trastero,zonas_verdes,gimnasio,portero) o null\n'
-            '  - "protection_type": "vpo"|"vpp"|"vppl"|"libre"|"otro" o null\n'
-            '  - "availability": "disponible"|"reservado"|"vendido"|"lista_espera" o null\n'
-            '  - "project_date": fecha estimada de entrega (string o null)\n\n'
-            '"forms": array donde cada elemento tiene:\n'
-            '  - "form_type": "contacto"|"inscripcion"|"informacion"\n'
-            '  - "description": que pide el formulario\n'
-            '  - "fields": lista de campos\n\n'
-            "Sin oportunidades o formularios -> arrays vacios.\n"
-            "Responde SOLO con el JSON objeto.\n\n"
-            f"Contenido texto:\n{text[:_MAX_PAGE_CHARS]}\n\n"
-            f"HTML (extracto):\n{html[:_MAX_HTML_CHARS]}"
+            "Responde con UN SOLO JSON objeto con estas dos claves:\n\n"
+            '```\n'
+            '{\n'
+            '  "opportunities": [\n'
+            '    {\n'
+            '      "title": "Nombre del proyecto/promocion",\n'
+            '      "description": "Descripcion breve, max 300 chars",\n'
+            '      "estimated_price": "Desde 185.000 EUR" o null,\n'
+            '      "status": "nueva"|"en_curso"|"proxima"|"cerrada",\n'
+            '      "ai_score": 7,\n'
+            '      "url": "URL directa al proyecto o la de la pagina",\n'
+            '      "house_type": "piso"|"chalet"|"adosado"|"duplex"|"atico"|"estudio"|"otro" o null,\n'
+            '      "bedrooms": 2,\n'
+            '      "sqm": 75.0,\n'
+            '      "amenities": "garaje,trastero,piscina" o null,\n'
+            '      "protection_type": "vpo"|"vpp"|"vppl"|"libre"|"otro" o null,\n'
+            '      "availability": "disponible"|"reservado"|"vendido"|"lista_espera" o null,\n'
+            '      "project_date": "2026-Q3" o null\n'
+            '    }\n'
+            '  ],\n'
+            '  "forms": [\n'
+            '    {"form_type": "contacto"|"inscripcion"|"informacion", "description": "...", "fields": ["nombre","email","telefono"]}\n'
+            '  ]\n'
+            '}\n'
+            '```\n\n'
+            "ai_score: 1-10 donde 10 es muy interesante (cooperativa nueva, buen precio, buena zona).\n"
+            "status: nueva = recien anunciada, en_curso = ya en venta, proxima = futura, cerrada = agotada.\n\n"
+            "Responde SOLO con el JSON. Sin explicaciones, sin markdown, sin ```.\n\n"
+            f"=== CONTENIDO DE LA PAGINA ===\n{text[:_MAX_PAGE_CHARS]}\n\n"
+            f"=== HTML ===\n{html[:_MAX_HTML_CHARS]}"
         )
         try:
             raw = await self._generate(prompt)
@@ -175,15 +185,22 @@ class OpenAICompatAnalyzer:
     async def generate_search_queries(
         self, known_sites: list[str],
     ) -> list[dict[str, str]]:
-        sites_summary = "\n".join(known_sites[:30])
+        sites_summary = "\n".join(known_sites[:40])
         prompt = (
-            "Eres un experto en buscar cooperativas y constructoras de vivienda "
-            "en Madrid.\n\nYa conozco estos sitios:\n"
+            "Eres un experto en buscar cooperativas de vivienda, constructoras, "
+            "promotoras y oportunidades de obra nueva en Madrid.\n\n"
+            "Ya conozco estos sitios:\n"
             f"{sites_summary}\n\n"
-            "Genera 5 queries nuevas para DuckDuckGo (en espanol) para encontrar "
-            "MAS cooperativas y constructoras en Madrid norte, este, oeste.\n\n"
+            "Genera 10 queries NUEVAS y DIVERSAS para DuckDuckGo (en espanol) "
+            "para encontrar MAS cooperativas, constructoras, promotoras, "
+            "viviendas VPO, obra nueva y promociones residenciales en "
+            "Madrid norte (Alcobendas, Tres Cantos, Colmenar Viejo, San Sebastian de los Reyes), "
+            "este (Torrejon, Coslada, Rivas, Alcala de Henares, Arganda), "
+            "y oeste (Pozuelo, Majadahonda, Boadilla, Las Rozas, Villanueva de la Canada).\n\n"
+            "Incluye queries para: webs de promotoras especificas, portales de VPO, "
+            "cooperativas nuevas, comparadores de obra nueva, blogs inmobiliarios con listados.\n\n"
             'Array JSON con: "query" y "zone" ("norte"|"este"|"oeste"|"todas").\n'
-            "Responde SOLO con el array JSON."
+            "Responde SOLO con el array JSON. Sin ```."
         )
         try:
             raw = await self._generate(prompt)

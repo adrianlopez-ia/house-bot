@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     db_path: Path = _BASE_DIR / "house_bot.db"
     screenshots_dir: Path = _BASE_DIR / "screenshots"
 
-    ai_provider: str = "cerebras"
+    ai_provider: str = "deepseek"
     ai_model: str = ""
 
     cerebras_api_key: str = ""

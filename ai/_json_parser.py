@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Union
 
 logger = logging.getLogger(__name__)
@@ -22,6 +23,7 @@ def parse_json_object(text: str) -> dict:
 
 def _parse(text: str, expected_type: type, label: str) -> Union[list, dict]:
     text = _strip_fences(text)
+
     try:
         result = json.loads(text)
         if isinstance(result, expected_type):
@@ -33,12 +35,20 @@ def _parse(text: str, expected_type: type, label: str) -> Union[list, dict]:
     start = text.find(open_char)
     end = text.rfind(close_char)
     if start != -1 and end > start:
+        candidate = text[start : end + 1]
         try:
-            return json.loads(text[start : end + 1])
+            return json.loads(candidate)
         except json.JSONDecodeError:
-            pass
+            cleaned = _fix_common_json_issues(candidate)
+            try:
+                return json.loads(cleaned)
+            except json.JSONDecodeError:
+                pass
 
-    logger.warning("Failed to parse JSON %s from LLM response (len=%d)", label, len(text))
+    logger.warning(
+        "Failed to parse JSON %s from LLM response (len=%d, preview=%.200s)",
+        label, len(text), text[:200],
+    )
     return expected_type()
 
 
@@ -53,3 +63,11 @@ def _strip_fences(text: str) -> str:
         if text.rstrip().endswith("```"):
             text = text.rstrip()[:-3]
     return text.strip()
+
+
+def _fix_common_json_issues(text: str) -> str:
+    """Best-effort fix for common LLM JSON mistakes."""
+    text = re.sub(r",\s*([}\]])", r"\1", text)
+    text = text.replace("\n", " ")
+    text = re.sub(r':\s*"([^"]*)"([^",}\]]*)"', r': "\1\2"', text)
+    return text
