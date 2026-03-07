@@ -177,6 +177,7 @@ def build_api_routes(container: Any) -> web.RouteTableDef:
             skip_visited_hours=profile["auto_skip_hours"],
         )
         container.forms._ai = new_ai
+        container.discovery.set_ai(new_ai)
 
         prefs = await repo.get_preferences()
         prefs["ai_provider"] = provider

@@ -1,12 +1,14 @@
 """Site discovery service.
 
 Loads seed sites, runs DuckDuckGo searches, and persists new finds.
+Uses AI to generate additional search queries for deeper discovery.
 All external dependencies are injected.
 """
 from __future__ import annotations
 
 import asyncio
 import logging
+from typing import Any, Optional
 from urllib.parse import urlparse
 
 from duckduckgo_search import DDGS
@@ -32,11 +34,13 @@ _EXCLUDED_DOMAINS = frozenset({
 
 _REQUIRED_KEYWORDS = frozenset({
     "vivienda", "cooperativa", "constructora", "obra nueva", "promocion",
-    "piso", "casa", "inmobiliaria", "residencial", "urbanizacion",
-    "madrid", "alcobendas", "torrejon", "coslada", "rivas",
-    "pozuelo", "majadahonda", "boadilla", "vallecas", "san sebastian",
+    "piso", "casa", "inmobiliaria", "residencial", "urbanizacion", "nuevo norte",
+    "madrid", "alcobendas", "torrejon", "solana", "fuencarral",
+    "barrio del pilar", "arroyofresno", "valdebebas", "valdezarza",
+    "tetuan", "hortaleza", "las tablas", "la moraleja",
+    "pozuelo", "majadahonda", "boadilla", "san sebastian",
     "tres cantos", "colmenar", "las rozas", "villanueva",
-    "alcala de henares", "arganda", "villaviciosa",
+    "alcala de henares", "arganda", "villaviciosa", "coslada", "rivas",
     "promotora", "pisos nuevos", "vpo", "vppl", "vivienda protegida",
     "entrega", "dormitorio", "habitacion", "desde", "precio",
     "comprar piso", "obra nueva madrid",
@@ -46,8 +50,15 @@ _ES_TLDS = (".es", ".com", ".org", ".net", ".eu")
 
 
 class DiscoveryService:
-    def __init__(self, repo: Repository) -> None:
+    """Discovers housing sites via seeds, DuckDuckGo, and AI-generated queries."""
+
+    def __init__(self, repo: Repository, ai: Optional[Any] = None) -> None:
         self._repo = repo
+        self._ai = ai
+
+    def set_ai(self, ai: Any) -> None:
+        """Hot-swap the AI analyzer (called when user switches provider)."""
+        self._ai = ai
 
     async def load_seeds(self) -> list[int]:
         ids: list[int] = []
@@ -61,21 +72,60 @@ class DiscoveryService:
         self, extra_queries: list[dict[str, str]] | None = None,
     ) -> list[Site]:
         queries = list(SEARCH_QUERIES) + (extra_queries or [])
+
         known_domains = {
             urlparse(s.url).netloc.replace("www.", "")
             for s in await self._repo.get_all_sites()
         }
         new_sites: list[Site] = []
 
+        # Phase 1: hardcoded + extra queries
+        found = await self._run_queries(queries, known_domains)
+        new_sites += found
+        logger.info("Phase 1 (static queries): %d new sites from %d queries",
+                     len(found), len(queries))
+
+        # Phase 2: AI-generated queries based on what we already know
+        if self._ai and hasattr(self._ai, "generate_search_queries"):
+            try:
+                known_urls = [s.url for s in await self._repo.get_all_sites()]
+                _emit({"type": "discovery_searching",
+                       "query": "IA generando queries adicionales...",
+                       "zone": "todas", "index": 0, "total": 0})
+                ai_queries = await self._ai.generate_search_queries(known_urls)
+                if ai_queries:
+                    logger.info("AI generated %d extra queries", len(ai_queries))
+                    found_ai = await self._run_queries(ai_queries, known_domains)
+                    new_sites += found_ai
+                    logger.info("Phase 2 (AI queries): %d new sites from %d queries",
+                                len(found_ai), len(ai_queries))
+            except Exception as exc:
+                logger.warning("AI query generation failed (non-fatal): %s", exc)
+
+        logger.info("Discovery complete: %d total new sites", len(new_sites))
+        return new_sites
+
+    async def _run_queries(
+        self,
+        queries: list[dict[str, str]],
+        known_domains: set[str],
+    ) -> list[Site]:
+        new_sites: list[Site] = []
+
         for qi, q in enumerate(queries):
+            query_text = q.get("query", "")
+            if not query_text:
+                continue
             _emit({
                 "type": "discovery_searching",
-                "query": q["query"], "zone": q.get("zone", "todas"),
+                "query": query_text, "zone": q.get("zone", "todas"),
                 "index": qi + 1, "total": len(queries),
             })
-            results = await _search_ddg(q["query"])
+            results = await _search_ddg(query_text)
             for hit in results:
-                url: str = hit["href"]
+                url: str = hit.get("href", "")
+                if not url:
+                    continue
                 domain = urlparse(url).netloc.replace("www.", "")
                 if domain in _EXCLUDED_DOMAINS or domain in known_domains:
                     continue
@@ -105,7 +155,6 @@ class DiscoveryService:
                     "zone": site.zone.value,
                 })
 
-        logger.info("Discovery complete: %d new sites", len(new_sites))
         return new_sites
 
 

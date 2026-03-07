@@ -99,7 +99,7 @@ class _Container:
         delay = profile["delay_between_sites"]
         skip_h = profile["auto_skip_hours"]
 
-        self.discovery = DiscoveryService(self.repo)
+        self.discovery = DiscoveryService(self.repo, ai=self.ai)
         self.scraper = ScraperService(
             self.repo, self.ai, self.browser,
             max_sites_per_cycle=max_sites,
