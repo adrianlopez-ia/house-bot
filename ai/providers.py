@@ -12,7 +12,7 @@ PROVIDERS: dict[str, dict[str, Any]] = {
     "cerebras": {
         "name": "Cerebras",
         "base_url": "https://api.cerebras.ai/v1",
-        "default_model": "llama-3.3-70b",
+        "default_model": "gpt-oss-120b",
         "rpd": 14_400,
         "rpm": 30,
         "auto_sites_per_cycle": 100,
@@ -21,9 +21,10 @@ PROVIDERS: dict[str, dict[str, Any]] = {
         "delay_between_sites": 3,
         "key_field": "cerebras_api_key",
         "models": [
-            {"id": "llama-3.3-70b", "name": "Llama 3.3 70B", "cost": "Gratis (ilimitado)", "capacity": "14,400 RPD · 30 RPM", "description": "Potente y gratuito. Ideal para analisis profundo."},
-            {"id": "llama3.1-8b", "name": "Llama 3.1 8B", "cost": "Gratis (ilimitado)", "capacity": "14,400 RPD · 30 RPM", "description": "Ultrarapido, menos preciso. Maximo volumen."},
-            {"id": "qwen-3-235b-a22b-instruct-2507", "name": "Qwen 3 235B", "cost": "Gratis (ilimitado)", "capacity": "14,400 RPD · 30 RPM", "description": "Modelo enorme. Maxima calidad de analisis."},
+            {"id": "gpt-oss-120b", "name": "GPT OSS 120B", "cost": "Gratis", "capacity": "14,400 RPD · 30 RPM · ~3000 tok/s", "description": "120B params, el mas rapido. Ideal para analisis profundo."},
+            {"id": "llama3.1-8b", "name": "Llama 3.1 8B", "cost": "Gratis", "capacity": "14,400 RPD · 30 RPM · ~2200 tok/s", "description": "Ultrarapido y ligero. Maximo volumen."},
+            {"id": "qwen-3-235b-a22b-instruct-2507", "name": "Qwen 3 235B", "cost": "Gratis (limites reducidos)", "capacity": "RPD reducido temporalmente · ~1400 tok/s", "description": "235B params. Maxima calidad, limites temporales por demanda."},
+            {"id": "zai-glm-4.7", "name": "Z.ai GLM 4.7", "cost": "Gratis (limites reducidos)", "capacity": "RPD reducido temporalmente · ~1000 tok/s", "description": "355B params. Modelo mas grande disponible."},
         ],
     },
     "groq": {
