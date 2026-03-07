@@ -346,6 +346,16 @@ class Repository:
 
     # ── preferences ────────────────────────────────────────────────────
 
+    _DEFAULT_PREFS: dict = {
+        "house_types": ["piso"],
+        "price_max": 400000,
+        "bedrooms_min": 2,
+        "sqm_min": 60,
+        "zones": ["norte", "oeste"],
+        "protection_types": ["VPO", "VPP", "VPPL"],
+        "turbo_mode": True,
+    }
+
     async def get_preferences(self) -> dict:
         import json as _json
         async with self._conn() as db:
@@ -353,8 +363,12 @@ class Repository:
                 "SELECT data FROM preferences WHERE id=1",
             )
             if rows:
-                return _json.loads(rows[0][0])
-            return {}
+                stored = _json.loads(rows[0][0])
+                if stored:
+                    return stored
+        prefs = dict(self._DEFAULT_PREFS)
+        await self.save_preferences(prefs)
+        return prefs
 
     async def save_preferences(self, prefs: dict) -> None:
         import json as _json
