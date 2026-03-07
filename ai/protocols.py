@@ -26,7 +26,7 @@ class AIAnalyzer(Protocol):
     ) -> dict[str, Any]: ...
 
     async def generate_search_queries(
-        self, known_sites: list[str],
+        self, known_sites: list[str], prefs: dict | None = None,
     ) -> list[dict[str, str]]: ...
 
     async def generate_form_fill_strategy(

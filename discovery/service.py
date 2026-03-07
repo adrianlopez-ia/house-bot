@@ -1,7 +1,7 @@
 """Site discovery service.
 
 Loads seed sites, runs DuckDuckGo searches, and persists new finds.
-Uses AI to generate additional search queries for deeper discovery.
+Uses AI + user preferences to generate targeted search queries.
 All external dependencies are injected.
 """
 from __future__ import annotations
@@ -48,6 +48,12 @@ _REQUIRED_KEYWORDS = frozenset({
 
 _ES_TLDS = (".es", ".com", ".org", ".net", ".eu")
 
+_ZONE_TERMS = {
+    "norte": "Alcobendas Tres Cantos Colmenar Viejo San Sebastian Reyes",
+    "este": "Torrejon Coslada Rivas Alcala Henares Arganda",
+    "oeste": "Pozuelo Majadahonda Boadilla Las Rozas Villanueva",
+}
+
 
 class DiscoveryService:
     """Discovers housing sites via seeds, DuckDuckGo, and AI-generated queries."""
@@ -71,7 +77,13 @@ class DiscoveryService:
     async def discover(
         self, extra_queries: list[dict[str, str]] | None = None,
     ) -> list[Site]:
+        prefs = await self._repo.get_preferences()
+
         queries = list(SEARCH_QUERIES) + (extra_queries or [])
+        pref_queries = _build_preference_queries(prefs)
+        if pref_queries:
+            queries += pref_queries
+            logger.info("Added %d preference-based queries", len(pref_queries))
 
         known_domains = {
             urlparse(s.url).netloc.replace("www.", "")
@@ -79,20 +91,20 @@ class DiscoveryService:
         }
         new_sites: list[Site] = []
 
-        # Phase 1: hardcoded + extra queries
         found = await self._run_queries(queries, known_domains)
         new_sites += found
-        logger.info("Phase 1 (static queries): %d new sites from %d queries",
+        logger.info("Phase 1 (static + preference queries): %d new sites from %d queries",
                      len(found), len(queries))
 
-        # Phase 2: AI-generated queries based on what we already know
         if self._ai and hasattr(self._ai, "generate_search_queries"):
             try:
                 known_urls = [s.url for s in await self._repo.get_all_sites()]
                 _emit({"type": "discovery_searching",
-                       "query": "IA generando queries adicionales...",
+                       "query": "IA generando queries con tus preferencias...",
                        "zone": "todas", "index": 0, "total": 0})
-                ai_queries = await self._ai.generate_search_queries(known_urls)
+                ai_queries = await self._ai.generate_search_queries(
+                    known_urls, prefs,
+                )
                 if ai_queries:
                     logger.info("AI generated %d extra queries", len(ai_queries))
                     found_ai = await self._run_queries(ai_queries, known_domains)
@@ -156,6 +168,51 @@ class DiscoveryService:
                 })
 
         return new_sites
+
+
+def _build_preference_queries(prefs: dict) -> list[dict[str, str]]:
+    """Generate extra DuckDuckGo queries based on user preferences."""
+    if not prefs:
+        return []
+    queries: list[dict[str, str]] = []
+
+    zones = prefs.get("zones") or ["norte", "este", "oeste"]
+    house_types = prefs.get("house_types") or []
+    protection = prefs.get("protection_types") or []
+
+    pmin = prefs.get("price_min")
+    pmax = prefs.get("price_max")
+    price_hint = ""
+    if pmax:
+        price_hint = f" desde {pmin or 0} hasta {pmax} euros"
+    elif pmin:
+        price_hint = f" desde {pmin} euros"
+
+    beds = prefs.get("bedrooms_min")
+    beds_hint = f" {beds} habitaciones" if beds else ""
+
+    for zone in zones:
+        zone_towns = _ZONE_TERMS.get(zone, "")
+
+        for ht in (house_types or [""]):
+            type_word = ht if ht else "vivienda"
+            queries.append({
+                "query": f"{type_word} obra nueva Madrid {zone} {zone_towns}{price_hint}{beds_hint} 2025 2026",
+                "zone": zone,
+            })
+
+        for pt in protection:
+            queries.append({
+                "query": f"{pt} vivienda protegida Madrid {zone} {zone_towns} 2025 2026",
+                "zone": zone,
+            })
+
+        queries.append({
+            "query": f"cooperativa vivienda Madrid {zone} {zone_towns}{price_hint} nueva inscripcion",
+            "zone": zone,
+        })
+
+    return queries
 
 
 def _is_relevant(url: str, title: str, body: str) -> bool:

@@ -177,14 +177,24 @@ class GeminiAnalyzer:
             return {"opportunities": [], "forms": []}
 
     async def generate_search_queries(
-        self, known_sites: list[str],
+        self, known_sites: list[str], prefs: dict | None = None,
     ) -> list[dict[str, str]]:
         sites_summary = "\n".join(known_sites[:40])
+        pref_block = ""
+        if prefs:
+            from scraper.service import build_preference_hint
+            hint = build_preference_hint(prefs)
+            if hint:
+                pref_block = (
+                    f"\n\nEl usuario busca especificamente:\n{hint}\n"
+                    "Genera queries que encajen con estas preferencias.\n"
+                )
         prompt = (
             "Eres un experto en buscar cooperativas de vivienda, constructoras, "
             "promotoras y oportunidades de obra nueva en Madrid.\n\n"
             "Ya conozco estos sitios:\n"
             f"{sites_summary}\n\n"
+            f"{pref_block}"
             "Genera 10 queries NUEVAS y DIVERSAS para DuckDuckGo (en espanol) "
             "para encontrar MAS cooperativas, constructoras, promotoras, "
             "viviendas VPO, obra nueva y promociones residenciales en "

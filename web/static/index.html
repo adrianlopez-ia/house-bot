@@ -798,10 +798,12 @@ function renderForms(){
 }
 
 /* ── Preferences ── */
-let _prefsLoaded=false;
+let _prefsRenderedJson='';
 function renderPrefs(){
-  if(_prefsLoaded)return;
   const p=S.prefs||{};
+  const json=JSON.stringify(p);
+  if(json===_prefsRenderedJson)return;
+  _prefsRenderedJson=json;
   setChips('pref-house-types',p.house_types||[]);
   setChips('pref-zones',p.zones||[]);
   setChips('pref-protection',p.protection_types||[]);
@@ -810,7 +812,6 @@ function renderPrefs(){
   $('#pref-price-max').value=p.price_max||'';
   $('#pref-beds-min').value=p.bedrooms_min||'';
   $('#pref-sqm-min').value=p.sqm_min||'';
-  _prefsLoaded=true;
 }
 
 function getChips(id){return[...$('#'+id).querySelectorAll('.chip.active')].map(c=>c.dataset.v)}
@@ -840,7 +841,8 @@ async function savePrefs(){
   try{
     await api('/api/preferences',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(prefs)});
     S.prefs=prefs;
-    toast('Preferencias guardadas','success');
+    _prefsRenderedJson=JSON.stringify(prefs);
+    toast('Preferencias guardadas en BBDD. Se usaran en proximas busquedas.','success');
   }catch(e){toast('Error guardando preferencias','error')}
 }
 

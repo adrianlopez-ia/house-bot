@@ -152,7 +152,7 @@ class ScraperService:
             logger.info("All sites recently visited, nothing to analyze")
             return AnalysisSummary()
 
-        pref_hint = _build_preference_hint(await self._repo.get_preferences())
+        pref_hint = build_preference_hint(await self._repo.get_preferences())
         logger.info(
             "Analyzing %d/%d sites (max %d/cycle, skip <%dh, delay %ds)",
             len(sites), len(all_sites), self.max_sites_per_cycle,
@@ -229,10 +229,13 @@ def _parse_form_type(raw: str) -> FormType:
         return FormType.CONTACTO
 
 
-def _build_preference_hint(prefs: dict) -> str:
+def build_preference_hint(prefs: dict) -> str:
+    """Build a human-readable preference summary for AI prompts."""
     if not prefs:
         return ""
     parts: list[str] = []
+    if prefs.get("zones"):
+        parts.append(f"Zonas preferidas: {', '.join(prefs['zones'])}")
     if prefs.get("house_types"):
         parts.append(f"Tipos preferidos: {', '.join(prefs['house_types'])}")
     pmin, pmax = prefs.get("price_min"), prefs.get("price_max")
