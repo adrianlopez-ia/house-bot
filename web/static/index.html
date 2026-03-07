@@ -646,12 +646,7 @@ function renderStats(){
       <div class="stat-value">${c.v}</div>
       <div class="stat-label">${c.l}</div>
     </div>`).join('');
-  if(s.running_actions){
-    $$('.action-btn').forEach(btn=>{
-      const name=btn.getAttribute('onclick')?.match(/runAction\('([^']+)'/)?.[1];
-      if(name&&s.running_actions[name]){btn.classList.add('loading');_activeButtons[name]=btn}
-    });
-  }
+  _restoreRunningActions(s.running_actions);
 }
 
 function renderCharts(){
@@ -803,16 +798,19 @@ function renderForms(){
 }
 
 /* ── Preferences ── */
+let _prefsLoaded=false;
 function renderPrefs(){
+  if(_prefsLoaded)return;
   const p=S.prefs||{};
   setChips('pref-house-types',p.house_types||[]);
   setChips('pref-zones',p.zones||[]);
   setChips('pref-protection',p.protection_types||[]);
   setChips('pref-amenities',p.amenities||[]);
-  if(p.price_min)$('#pref-price-min').value=p.price_min;
-  if(p.price_max)$('#pref-price-max').value=p.price_max;
-  if(p.bedrooms_min)$('#pref-beds-min').value=p.bedrooms_min;
-  if(p.sqm_min)$('#pref-sqm-min').value=p.sqm_min;
+  $('#pref-price-min').value=p.price_min||'';
+  $('#pref-price-max').value=p.price_max||'';
+  $('#pref-beds-min').value=p.bedrooms_min||'';
+  $('#pref-sqm-min').value=p.sqm_min||'';
+  _prefsLoaded=true;
 }
 
 function getChips(id){return[...$('#'+id).querySelectorAll('.chip.active')].map(c=>c.dataset.v)}
@@ -827,7 +825,9 @@ $$('.checkbox-group .chip').forEach(chip=>{
 });
 
 async function savePrefs(){
+  const base=S.prefs||{};
   const prefs={
+    ...base,
     house_types:getChips('pref-house-types'),
     price_min:parseInt($('#pref-price-min').value)||null,
     price_max:parseInt($('#pref-price-max').value)||null,
@@ -836,7 +836,6 @@ async function savePrefs(){
     zones:getChips('pref-zones'),
     protection_types:getChips('pref-protection'),
     amenities:getChips('pref-amenities'),
-    ai_model:S.prefs?.ai_model||null,
   };
   try{
     await api('/api/preferences',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(prefs)});
@@ -971,6 +970,23 @@ const _FEED_ICONS={
 };
 
 const _ACTION_LABELS={'discover':'Descubrir sitios','scrape':'Analizar sitios','fill-forms':'Rellenar formularios','full-search':'Busqueda completa','reset-db':'Reset BBDD'};
+const _ACTION_NAME_MAP={'full-search':'full-search','discover':'discover','scrape':'scrape','fill-forms':'fill-forms'};
+
+function _saveFeed(){
+  try{
+    const items=[...$('#feed-body').querySelectorAll('.feed-item')].slice(0,50).map(el=>el.outerHTML);
+    sessionStorage.setItem('feed',JSON.stringify(items));
+  }catch(e){}
+}
+function _restoreFeed(){
+  try{
+    const items=JSON.parse(sessionStorage.getItem('feed')||'[]');
+    if(!items.length)return;
+    const body=$('#feed-body');
+    const empty=$('#feed-empty');if(empty)empty.remove();
+    items.forEach(html=>{const div=document.createElement('div');div.innerHTML=html;if(div.firstChild)body.appendChild(div.firstChild)});
+  }catch(e){}
+}
 
 function addFeedItem(evt){
   const el=$('#feed-empty');if(el)el.remove();
@@ -984,6 +1000,7 @@ function addFeedItem(evt){
   div.innerHTML=`<div class="feed-icon ${meta.cls}">${meta.icon}</div><div class="feed-text">${msg}</div><div class="feed-time">${time}</div>`;
   body.insertBefore(div,body.firstChild);
   while(body.children.length>80)body.removeChild(body.lastChild);
+  _saveFeed();
 }
 
 function _feedMessage(e){
@@ -1029,6 +1046,20 @@ function updateProgress(current,total,label){
 function clearFeed(){
   $('#feed-body').innerHTML='<div class="feed-empty" id="feed-empty">Esperando actividad...</div>';
   $('#feed-progress').style.display='none';
+  sessionStorage.removeItem('feed');
+}
+
+function _restoreRunningActions(running){
+  if(!running)return;
+  const names=Object.keys(running).filter(k=>running[k]);
+  if(!names.length)return;
+  $$('.action-btn').forEach(btn=>{
+    const m=btn.getAttribute('onclick')?.match(/runAction\('([^']+)'/);
+    if(m&&names.includes(m[1])){
+      btn.classList.add('loading');
+      _activeButtons[m[1]]=btn;
+    }
+  });
 }
 
 let _evtSource=null;
@@ -1055,9 +1086,7 @@ function connectSSE(){
       const evt=JSON.parse(msg.data);
       console.log('[SSE] event:',evt.type);
       if(evt.type==='connected'){
-        if(evt.running&&Object.keys(evt.running).length){
-          addFeedItem({type:'action_start',action:Object.keys(evt.running)[0]});
-        }
+        _restoreRunningActions(evt.running);
         return;
       }
       addFeedItem(evt);
@@ -1075,6 +1104,7 @@ function connectSSE(){
 }
 
 /* ── Init ── */
+_restoreFeed();
 loadAll();
 connectSSE();
 setInterval(loadAll,60000);

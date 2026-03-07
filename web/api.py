@@ -217,7 +217,9 @@ def build_api_routes(container: Any) -> web.RouteTableDef:
     @routes.put("/api/preferences")
     async def save_prefs(req: web.Request) -> web.Response:
         body = await req.json()
-        await repo.save_preferences(body)
+        existing = await repo.get_preferences()
+        existing.update(body)
+        await repo.save_preferences(existing)
         return _json({"status": "ok"})
 
     # ── SSE (Server-Sent Events) ─────────────────────────────────────
