@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _MIN_CONTENT_CHARS = 20
-_MAX_CONCURRENT_BROWSERS = 2
+_MAX_CONCURRENT_BROWSERS = 1
 
 
 class ScraperService:
@@ -222,10 +222,9 @@ class ScraperService:
         _emit({"type": "turbo_start", "providers": [e.name for e in entries],
                "sites": len(sites)})
         logger.info(
-            "TURBO: %d sites across %d providers (%s), max %d concurrent browsers",
+            "TURBO: %d sites across %d providers (%s), 1 browser + parallel AI",
             len(sites), len(entries),
             ", ".join(f"{e.name}({e.rpm}rpm)" for e in entries),
-            _MAX_CONCURRENT_BROWSERS,
         )
 
         queue: asyncio.Queue[Site] = asyncio.Queue()

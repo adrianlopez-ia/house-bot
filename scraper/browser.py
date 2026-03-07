@@ -73,9 +73,23 @@ class BrowserManager:
             self._pw = await async_playwright().start()
             self._browser = await self._pw.chromium.launch(
                 headless=True,
-                args=["--no-sandbox", "--disable-dev-shm-usage"],
+                args=[
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu",
+                    "--disable-extensions",
+                    "--disable-background-networking",
+                    "--disable-default-apps",
+                    "--disable-translate",
+                    "--disable-sync",
+                    "--disable-software-rasterizer",
+                    "--no-first-run",
+                    "--no-zygote",
+                    "--single-process",
+                    "--js-flags=--max-old-space-size=128",
+                ],
             )
-            logger.info("Browser started")
+            logger.info("Browser started (low-memory mode)")
 
     async def close(self) -> None:
         if self._browser and self._browser.is_connected():
@@ -91,7 +105,7 @@ class BrowserManager:
         return await self._browser.new_context(
             user_agent=_DEFAULT_UA,
             locale="es-ES",
-            viewport={"width": 1280, "height": 900},
+            viewport={"width": 1024, "height": 768},
         )
 
     # ── high-level helpers ─────────────────────────────────────────────
@@ -101,10 +115,10 @@ class BrowserManager:
         try:
             page = await ctx.new_page()
             await page.goto(url, wait_until="domcontentloaded", timeout=self._timeout_ms)
-            await page.wait_for_timeout(2500)
+            await page.wait_for_timeout(1500)
             await dismiss_cookies(page)
             await page.evaluate(_SCROLL_JS)
-            await page.wait_for_timeout(1500)
+            await page.wait_for_timeout(800)
 
             title = await page.title()
             text = await page.evaluate(_STRIP_JS)
