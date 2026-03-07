@@ -15,6 +15,7 @@ from db.models import Site, SiteType, Zone
 from db.repository import Repository
 from discovery.seed_sites import SEARCH_QUERIES, SEED_SITES
 from exceptions import DiscoveryError
+from web.event_bus import emit as _emit
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,12 @@ class DiscoveryService:
         }
         new_sites: list[Site] = []
 
-        for q in queries:
+        for qi, q in enumerate(queries):
+            _emit({
+                "type": "discovery_searching",
+                "query": q["query"], "zone": q.get("zone", "todas"),
+                "index": qi + 1, "total": len(queries),
+            })
             results = await _search_ddg(q["query"])
             for hit in results:
                 url: str = hit["href"]
@@ -88,6 +94,11 @@ class DiscoveryService:
                 ))
                 known_domains.add(domain)
                 logger.info("Discovered: %s -> %s", site.name, url)
+                _emit({
+                    "type": "discovery_found",
+                    "site": site.name, "url": url,
+                    "zone": site.zone.value,
+                })
 
         logger.info("Discovery complete: %d new sites", len(new_sites))
         return new_sites

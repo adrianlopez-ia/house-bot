@@ -244,6 +244,33 @@ footer a{color:var(--accent)}
 .dialog h4{font-size:16px;margin-bottom:8px;color:var(--danger)}
 .dialog p{font-size:13px;color:var(--text-secondary);margin-bottom:20px}
 .dialog-actions{display:flex;gap:10px;justify-content:flex-end}
+
+/* Live activity feed */
+.live-feed{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:24px;overflow:hidden}
+.live-header{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border)}
+.live-header h3{font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.04em;display:flex;align-items:center;gap:8px}
+.live-dot{width:8px;height:8px;border-radius:50%;background:var(--text-muted);flex-shrink:0}
+.live-dot.connected{background:var(--success);animation:pulse-dot 2s ease infinite}
+@keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.4}}
+.live-body{max-height:300px;overflow-y:auto;scroll-behavior:smooth}
+.feed-item{display:flex;align-items:flex-start;gap:10px;padding:8px 20px;border-bottom:1px solid var(--border);font-size:12px;animation:feed-in .3s ease}
+.feed-item:last-child{border-bottom:none}
+@keyframes feed-in{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+.feed-icon{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;margin-top:1px}
+.feed-icon.search{background:var(--info-muted);color:var(--info)}
+.feed-icon.found{background:var(--success-muted);color:var(--success)}
+.feed-icon.analyzing{background:var(--warning-muted);color:var(--warning)}
+.feed-icon.error{background:var(--error-muted);color:var(--error)}
+.feed-icon.done{background:var(--accent-muted);color:var(--accent)}
+.feed-icon.star{background:var(--warning-muted);color:var(--warning)}
+.feed-text{flex:1;min-width:0;color:var(--text-secondary);line-height:1.5}
+.feed-text strong{color:var(--text-primary);font-weight:600}
+.feed-time{font-size:10px;color:var(--text-muted);flex-shrink:0;margin-top:2px}
+.feed-empty{padding:20px;text-align:center;color:var(--text-muted);font-size:12px}
+.feed-progress{padding:10px 20px;border-bottom:1px solid var(--border)}
+.progress-bar{height:4px;border-radius:2px;background:var(--border);overflow:hidden}
+.progress-fill{height:100%;border-radius:2px;background:var(--accent);transition:width .4s ease}
+.progress-label{font-size:11px;color:var(--text-muted);margin-top:4px}
 </style>
 </head>
 
@@ -300,6 +327,21 @@ footer a{color:var(--accent)}
         <button class="action-btn" onclick="runAction('fill-forms','Formularios')">
           <span class="action-icon">&#128221;</span><span class="spinner"></span> Rellenar formularios
         </button>
+      </div>
+    </div>
+    <div class="live-feed" id="live-feed">
+      <div class="live-header">
+        <h3><span class="live-dot" id="sse-dot"></span> Actividad en vivo</h3>
+        <button class="btn btn-ghost" onclick="clearFeed()" style="padding:4px 10px;font-size:11px">Limpiar</button>
+      </div>
+      <div id="feed-progress" style="display:none">
+        <div class="feed-progress">
+          <div class="progress-bar"><div class="progress-fill" id="feed-pbar" style="width:0%"></div></div>
+          <div class="progress-label" id="feed-plabel"></div>
+        </div>
+      </div>
+      <div class="live-body" id="feed-body">
+        <div class="feed-empty" id="feed-empty">Esperando actividad...</div>
       </div>
     </div>
     <div class="charts-grid">
@@ -569,16 +611,17 @@ async function refreshAll(){
 }
 
 /* ── Actions ── */
+const _activeButtons={};
 async function runAction(name,label){
   const btn=event.currentTarget;
   btn.classList.add('loading');
+  _activeButtons[name]=btn;
   try{
     const r=await api('/api/actions/'+name,{method:'POST'});
-    if(r.status==='ok'){toast(label+' completado','success');await loadAll()}
-    else if(r.status==='already_running'){toast(label+' ya en ejecucion','warning')}
-    else{toast('Error: '+(r.error||'desconocido'),'error')}
-  }catch(e){toast('Error de conexion','error')}
-  finally{btn.classList.remove('loading')}
+    if(r.status==='started'){toast(label+' iniciado...','success')}
+    else if(r.status==='already_running'){toast(label+' ya en ejecucion','warning');btn.classList.remove('loading')}
+    else{toast('Error: '+(r.error||'desconocido'),'error');btn.classList.remove('loading')}
+  }catch(e){toast('Error de conexion','error');btn.classList.remove('loading')}
 }
 
 /* ── Render ── */
@@ -603,6 +646,12 @@ function renderStats(){
       <div class="stat-value">${c.v}</div>
       <div class="stat-label">${c.l}</div>
     </div>`).join('');
+  if(s.running_actions){
+    $$('.action-btn').forEach(btn=>{
+      const name=btn.getAttribute('onclick')?.match(/runAction\('([^']+)'/)?.[1];
+      if(name&&s.running_actions[name]){btn.classList.add('loading');_activeButtons[name]=btn}
+    });
+  }
 }
 
 function renderCharts(){
@@ -908,8 +957,109 @@ function toast(msg,type){
   clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('show'),4000);
 }
 
+/* ── Live Feed (SSE) ── */
+const _FEED_ICONS={
+  action_start:{icon:'\u25B6',cls:'search'},
+  action_complete:{icon:'\u2713',cls:'done'},
+  action_error:{icon:'\u2717',cls:'error'},
+  discovery_searching:{icon:'\u{1F50E}',cls:'search'},
+  discovery_found:{icon:'\u{1F310}',cls:'found'},
+  site_analyzing:{icon:'\u{1F9E0}',cls:'analyzing'},
+  site_analyzed:{icon:'\u2713',cls:'found'},
+  site_error:{icon:'\u2717',cls:'error'},
+  opportunity_found:{icon:'\u2B50',cls:'star'},
+};
+
+const _ACTION_LABELS={'discover':'Descubrir sitios','scrape':'Analizar sitios','fill-forms':'Rellenar formularios','full-search':'Busqueda completa','reset-db':'Reset BBDD'};
+
+function addFeedItem(evt){
+  const el=$('#feed-empty');if(el)el.remove();
+  const body=$('#feed-body');
+  const meta=_FEED_ICONS[evt.type]||{icon:'\u2139',cls:'search'};
+  const msg=_feedMessage(evt);
+  if(!msg)return;
+  const time=new Date().toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const div=document.createElement('div');
+  div.className='feed-item';
+  div.innerHTML=`<div class="feed-icon ${meta.cls}">${meta.icon}</div><div class="feed-text">${msg}</div><div class="feed-time">${time}</div>`;
+  body.insertBefore(div,body.firstChild);
+  while(body.children.length>80)body.removeChild(body.lastChild);
+}
+
+function _feedMessage(e){
+  switch(e.type){
+    case'action_start':return`<strong>${_ACTION_LABELS[e.action]||e.action}</strong> iniciado`;
+    case'action_complete':{
+      const r=e.result||{};
+      const parts=[];
+      if(r.new_sites!=null)parts.push(r.new_sites+' sitios nuevos');
+      if(r.sites_analyzed!=null)parts.push(r.sites_analyzed+' sitios analizados');
+      if(r.opportunities!=null)parts.push(r.opportunities+' oportunidades');
+      if(r.forms!=null)parts.push(r.forms+' formularios');
+      if(r.errors)parts.push(r.errors+' errores');
+      const detail=parts.length?' \u2014 '+parts.join(', '):'';
+      return`<strong>${_ACTION_LABELS[e.action]||e.action}</strong> completado${detail}`;
+    }
+    case'action_error':return`<strong>${_ACTION_LABELS[e.action]||e.action}</strong> error: ${esc(e.error||'')}`;
+    case'discovery_searching':return`Buscando: <strong>${esc(e.query)}</strong> (${e.index}/${e.total})`;
+    case'discovery_found':return`Nuevo sitio: <strong>${esc(e.site)}</strong> <span class="badge badge-${e.zone}">${ZONE_L[e.zone]||e.zone}</span>`;
+    case'site_analyzing':{
+      updateProgress(e.index,e.total,`Analizando ${e.index}/${e.total}: ${e.site}`);
+      return`Analizando <strong>${esc(e.site)}</strong> (${e.index}/${e.total})`;
+    }
+    case'site_analyzed':return`<strong>${esc(e.site)}</strong> \u2014 ${e.opps} oportunidades, ${e.forms} formularios`;
+    case'site_error':return`Error en <strong>${esc(e.site)}</strong>: ${esc((e.error||'').substring(0,100))}`;
+    case'opportunity_found':{
+      const sc=e.score||0;const cls=sc>=7?'score-high':sc>=4?'score-mid':'score-low';
+      return`<strong>${esc(e.title)}</strong> <span class="score ${cls}">${sc}/10</span> <span class="badge badge-${e.zone}">${ZONE_L[e.zone]||e.zone}</span> ${e.price?esc(e.price):''}`;
+    }
+    default:return null;
+  }
+}
+
+function updateProgress(current,total,label){
+  const wrap=$('#feed-progress');
+  if(current>=total){wrap.style.display='none';return}
+  wrap.style.display='block';
+  const pct=Math.round(current/total*100);
+  $('#feed-pbar').style.width=pct+'%';
+  $('#feed-plabel').textContent=label||`${current}/${total}`;
+}
+
+function clearFeed(){
+  $('#feed-body').innerHTML='<div class="feed-empty" id="feed-empty">Esperando actividad...</div>';
+  $('#feed-progress').style.display='none';
+}
+
+let _evtSource=null;
+function connectSSE(){
+  if(_evtSource)_evtSource.close();
+  _evtSource=new EventSource('/api/events');
+  _evtSource.onopen=()=>{$('#sse-dot').classList.add('connected')};
+  _evtSource.onerror=()=>{
+    $('#sse-dot').classList.remove('connected');
+    setTimeout(connectSSE,5000);
+  };
+  _evtSource.onmessage=(msg)=>{
+    try{
+      const evt=JSON.parse(msg.data);
+      addFeedItem(evt);
+      if(evt.type==='action_complete'||evt.type==='action_error'){
+        const btn=_activeButtons[evt.action];
+        if(btn)btn.classList.remove('loading');
+        delete _activeButtons[evt.action];
+        $('#feed-progress').style.display='none';
+        loadAll();
+        if(evt.type==='action_complete')toast((_ACTION_LABELS[evt.action]||evt.action)+' completado','success');
+        else toast('Error: '+(evt.error||''),'error');
+      }
+    }catch(e){console.error('SSE parse error',e)}
+  };
+}
+
 /* ── Init ── */
 loadAll();
+connectSSE();
 setInterval(loadAll,60000);
 </script>
 </body>

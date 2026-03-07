@@ -18,6 +18,7 @@ from db.models import (
 from db.repository import Repository
 from exceptions import ScraperError
 from scraper.browser import BrowserManager
+from web.event_bus import emit as _emit
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +102,13 @@ class ScraperService:
             await self._repo.upsert_opportunity(opp)
             opp_count += 1
             logger.info("Opportunity: %s (score=%s)", opp.title, opp.ai_score)
+            _emit({
+                "type": "opportunity_found",
+                "title": opp.title,
+                "score": opp.ai_score,
+                "zone": opp.zone.value,
+                "price": opp.estimated_price,
+            })
 
         form_count = 0
         for fdata in combined.get("forms", []):
@@ -153,15 +161,35 @@ class ScraperService:
 
         total_opps = total_forms = errors = 0
         for idx, site in enumerate(sites):
+            _emit({
+                "type": "site_analyzing",
+                "site": site.name, "url": site.url,
+                "index": idx + 1, "total": len(sites),
+            })
             try:
                 result = await self.analyze_site(site, pref_hint)
                 total_opps += result.opportunities
                 total_forms += result.forms
                 if result.error:
                     errors += 1
+                    _emit({
+                        "type": "site_error",
+                        "site": site.name, "error": result.error,
+                    })
+                else:
+                    _emit({
+                        "type": "site_analyzed",
+                        "site": site.name,
+                        "opps": result.opportunities,
+                        "forms": result.forms,
+                    })
             except Exception as exc:
                 logger.error("Error analyzing %s: %s", site.url, exc)
                 errors += 1
+                _emit({
+                    "type": "site_error",
+                    "site": site.name, "error": str(exc)[:200],
+                })
 
             if idx < len(sites) - 1:
                 await asyncio.sleep(self.delay_between_sites)

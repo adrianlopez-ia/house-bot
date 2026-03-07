@@ -11,6 +11,7 @@ from aiohttp import web
 from ai.providers import (
     PROVIDERS, available_providers, build_analyzer, get_api_key, get_provider,
 )
+from web.event_bus import emit, subscribe, unsubscribe, format_sse
 
 logger = logging.getLogger(__name__)
 
@@ -219,19 +220,56 @@ def build_api_routes(container: Any) -> web.RouteTableDef:
         await repo.save_preferences(body)
         return _json({"status": "ok"})
 
-    # ── Actions ────────────────────────────────────────────────────────
+    # ── SSE (Server-Sent Events) ─────────────────────────────────────
 
-    async def _run_action(name: str, coro: Any) -> dict:
+    @routes.get("/api/events")
+    async def sse_events(req: web.Request) -> web.StreamResponse:
+        resp = web.StreamResponse(
+            status=200,
+            reason="OK",
+            headers={
+                "Content-Type": "text/event-stream",
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+        await resp.prepare(req)
+
+        q = subscribe()
+        try:
+            while True:
+                try:
+                    event = await asyncio.wait_for(q.get(), timeout=30)
+                    await resp.write(format_sse(event).encode())
+                except asyncio.TimeoutError:
+                    await resp.write(b": keepalive\n\n")
+                except ConnectionResetError:
+                    break
+        finally:
+            unsubscribe(q)
+        return resp
+
+    # ── Actions (background with SSE events) ──────────────────────────
+
+    async def _run_bg(name: str, coro_fn: Any) -> dict:
         if _running_actions.get(name):
             return {"status": "already_running", "action": name}
         _running_actions[name] = True
-        try:
-            result = await coro
-            return {"status": "ok", "action": name, "result": result}
-        except Exception as exc:
-            return {"status": "error", "action": name, "error": str(exc)}
-        finally:
-            _running_actions[name] = False
+        emit({"type": "action_start", "action": name})
+
+        async def _wrapper() -> None:
+            try:
+                result = await coro_fn()
+                emit({"type": "action_complete", "action": name, "result": result})
+            except Exception as exc:
+                logger.exception("Action %s failed", name)
+                emit({"type": "action_error", "action": name, "error": str(exc)[:300]})
+            finally:
+                _running_actions[name] = False
+
+        asyncio.create_task(_wrapper())
+        return {"status": "started", "action": name}
 
     @routes.post("/api/actions/discover")
     async def action_discover(_req: web.Request) -> web.Response:
@@ -239,8 +277,7 @@ def build_api_routes(container: Any) -> web.RouteTableDef:
             await container.discovery.load_seeds()
             new = await container.discovery.discover()
             return {"new_sites": len(new)}
-        r = await _run_action("discover", _do())
-        return _json(r)
+        return _json(await _run_bg("discover", _do))
 
     @routes.post("/api/actions/scrape")
     async def action_scrape(_req: web.Request) -> web.Response:
@@ -253,16 +290,14 @@ def build_api_routes(container: Any) -> web.RouteTableDef:
                 "forms": s.forms_found,
                 "errors": s.errors,
             }
-        r = await _run_action("scrape", _do())
-        return _json(r)
+        return _json(await _run_bg("scrape", _do))
 
     @routes.post("/api/actions/fill-forms")
     async def action_fill(_req: web.Request) -> web.Response:
         async def _do() -> dict:
             r = await container.forms.fill_pending()
             return {"filled": r.filled, "errors": r.errors, "skipped": r.skipped}
-        r = await _run_action("fill-forms", _do())
-        return _json(r)
+        return _json(await _run_bg("fill-forms", _do))
 
     @routes.post("/api/actions/full-search")
     async def action_full(_req: web.Request) -> web.Response:
@@ -276,12 +311,12 @@ def build_api_routes(container: Any) -> web.RouteTableDef:
                 "sites_analyzed": s.sites_analyzed,
                 "opportunities": s.opportunities_found,
             }
-        r = await _run_action("full-search", _do())
-        return _json(r)
+        return _json(await _run_bg("full-search", _do))
 
     @routes.post("/api/actions/reset-db")
     async def action_reset(_req: web.Request) -> web.Response:
         await repo.reset_all()
+        emit({"type": "action_complete", "action": "reset-db", "result": {}})
         return _json({"status": "ok", "message": "All data deleted"})
 
     return routes
