@@ -30,6 +30,8 @@ _EXCLUDED_DOMAINS = frozenset({
     "tiendeo.com", "poki.com", "gry.pl", "bab.la", "rae.es",
     "wordreference.com", "thefreedictionary.com", "wiktionary.org",
     "scribd.com", "zhihu.com", "se-escribe.com",
+    "idealista.com", "www.idealista.com",
+    "alltrails.com", "moovitapp.com",
 })
 
 _REQUIRED_KEYWORDS = frozenset({

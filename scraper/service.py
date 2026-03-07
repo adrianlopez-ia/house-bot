@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _MIN_CONTENT_CHARS = 20
-_MAX_CONCURRENT_BROWSERS = 1
+_MAX_TURBO_SITES = 30
 
 
 class ScraperService:
@@ -48,7 +48,6 @@ class ScraperService:
         self._ai = ai
         self._browser = browser
         self._lock = asyncio.Lock()
-        self._browser_sem = asyncio.Semaphore(_MAX_CONCURRENT_BROWSERS)
         self.max_sites_per_cycle = max_sites_per_cycle
         self.delay_between_sites = delay_between_sites
         self.skip_visited_hours = skip_visited_hours
@@ -81,8 +80,7 @@ class ScraperService:
     ) -> AnalysisResult:
         analyzer = ai or self._ai
 
-        async with self._browser_sem:
-            scrape_result = await self._browser.scrape(site.url)
+        scrape_result = await self._browser.scrape(site.url)
 
         if not scrape_result.success:
             logger.warning("Skipping %s: %s", site.url, scrape_result.error)
@@ -210,7 +208,7 @@ class ScraperService:
         pool = self._pool
         assert pool is not None
 
-        max_sites = min(pool.total_capacity(), 200)
+        max_sites = min(pool.total_capacity(), _MAX_TURBO_SITES)
         sites = await self._get_pending_sites(max_sites)
         if not sites:
             logger.info("All sites recently visited, nothing to analyze")

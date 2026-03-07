@@ -9,14 +9,7 @@ from db.models import Site, Zone, SiteType
 
 SEED_SITES: tuple[Site, ...] = (
     # ── Portales inmobiliarios principales ─────────────────────────────
-    Site(url="https://www.idealista.com/obra-nueva/madrid/norte/",
-         name="Idealista Obra Nueva Norte", zone=Zone.NORTE, site_type=SiteType.PORTAL),
-    Site(url="https://www.idealista.com/obra-nueva/madrid/este/",
-         name="Idealista Obra Nueva Este", zone=Zone.ESTE, site_type=SiteType.PORTAL),
-    Site(url="https://www.idealista.com/obra-nueva/madrid/oeste/",
-         name="Idealista Obra Nueva Oeste", zone=Zone.OESTE, site_type=SiteType.PORTAL),
-    Site(url="https://www.idealista.com/obra-nueva/madrid-provincia/",
-         name="Idealista Obra Nueva Provincia", zone=Zone.TODAS, site_type=SiteType.PORTAL),
+    # Idealista removed: aggressive CAPTCHA blocks headless scraping (0 chars always)
     Site(url="https://www.fotocasa.es/es/obra-nueva/viviendas/madrid-capital/todas-las-zonas/l",
          name="Fotocasa Obra Nueva Madrid", zone=Zone.TODAS, site_type=SiteType.PORTAL),
     Site(url="https://www.pisos.com/obra-nueva/pisos-madrid/",

@@ -1,12 +1,14 @@
 """Playwright browser lifecycle manager.
 
-Encapsulates all browser creation, context setup, cookie dismissal, and
-teardown behind a clean async interface -- no global state.
+Owns a single Chromium instance; hands out ephemeral contexts.
+Includes a startup lock to prevent concurrent launches and automatic
+recycling after N scrapes to keep memory bounded.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 from playwright.async_api import (
@@ -59,6 +61,22 @@ _SCROLL_JS = """\
 })()
 """
 
+_CHROMIUM_ARGS = [
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+    "--disable-extensions",
+    "--disable-background-networking",
+    "--disable-default-apps",
+    "--disable-translate",
+    "--disable-sync",
+    "--disable-software-rasterizer",
+    "--no-first-run",
+    "--js-flags=--max-old-space-size=128",
+]
+
+_RECYCLE_AFTER = 10
+
 
 class BrowserManager:
     """Owns a single Chromium instance; hands out ephemeral contexts."""
@@ -67,40 +85,52 @@ class BrowserManager:
         self._timeout_ms = timeout_ms
         self._pw: Optional[Playwright] = None
         self._browser: Optional[Browser] = None
+        self._lock = asyncio.Lock()
+        self._scrape_count = 0
 
     async def start(self) -> None:
-        if self._browser is None or not self._browser.is_connected():
+        async with self._lock:
+            if self._browser is not None and self._browser.is_connected():
+                return
+            if self._pw is not None:
+                try:
+                    await self._pw.stop()
+                except Exception:
+                    pass
             self._pw = await async_playwright().start()
             self._browser = await self._pw.chromium.launch(
                 headless=True,
-                args=[
-                    "--no-sandbox",
-                    "--disable-dev-shm-usage",
-                    "--disable-gpu",
-                    "--disable-extensions",
-                    "--disable-background-networking",
-                    "--disable-default-apps",
-                    "--disable-translate",
-                    "--disable-sync",
-                    "--disable-software-rasterizer",
-                    "--no-first-run",
-                    "--no-zygote",
-                    "--single-process",
-                    "--js-flags=--max-old-space-size=128",
-                ],
+                args=_CHROMIUM_ARGS,
             )
+            self._scrape_count = 0
             logger.info("Browser started (low-memory mode)")
 
     async def close(self) -> None:
+        async with self._lock:
+            await self._close_internal()
+
+    async def _close_internal(self) -> None:
         if self._browser and self._browser.is_connected():
-            await self._browser.close()
+            try:
+                await self._browser.close()
+            except Exception:
+                pass
         if self._pw:
-            await self._pw.stop()
+            try:
+                await self._pw.stop()
+            except Exception:
+                pass
         self._browser = None
         self._pw = None
+        self._scrape_count = 0
         logger.info("Browser closed")
 
-    async def new_context(self) -> BrowserContext:
+    async def _recycle_if_needed(self) -> None:
+        if self._scrape_count >= _RECYCLE_AFTER:
+            logger.info("Recycling browser after %d scrapes", self._scrape_count)
+            await self._close_internal()
+
+    async def _new_context(self) -> BrowserContext:
         await self.start()
         return await self._browser.new_context(
             user_agent=_DEFAULT_UA,
@@ -111,7 +141,28 @@ class BrowserManager:
     # ── high-level helpers ─────────────────────────────────────────────
 
     async def scrape(self, url: str, *, max_text: int = 20_000, max_html: int = 12_000) -> ScrapeResult:
-        ctx = await self.new_context()
+        for attempt in range(2):
+            try:
+                return await self._scrape_once(url, max_text=max_text, max_html=max_html)
+            except Exception as exc:
+                if attempt == 0 and "closed" in str(exc).lower():
+                    logger.warning("Browser died, restarting for retry: %s", url)
+                    async with self._lock:
+                        await self._close_internal()
+                    continue
+                logger.warning("Scrape failed for %s: %s", url, exc)
+                return ScrapeResult(
+                    text="", html="", title="", final_url=url,
+                    success=False, error=str(exc)[:300],
+                )
+        return ScrapeResult(text="", html="", title="", final_url=url,
+                            success=False, error="max retries")
+
+    async def _scrape_once(self, url: str, *, max_text: int, max_html: int) -> ScrapeResult:
+        async with self._lock:
+            await self._recycle_if_needed()
+
+        ctx = await self._new_context()
         try:
             page = await ctx.new_page()
             await page.goto(url, wait_until="domcontentloaded", timeout=self._timeout_ms)
@@ -124,6 +175,7 @@ class BrowserManager:
             text = await page.evaluate(_STRIP_JS)
             html = await page.content()
 
+            self._scrape_count += 1
             logger.info("Scraped: %s (%d chars)", url, len(text))
             return ScrapeResult(
                 text=text[:max_text],
@@ -132,17 +184,14 @@ class BrowserManager:
                 final_url=page.url,
                 success=True,
             )
-        except Exception as exc:
-            logger.warning("Scrape failed for %s: %s", url, exc)
-            return ScrapeResult(
-                text="", html="", title="", final_url=url,
-                success=False, error=str(exc),
-            )
         finally:
-            await ctx.close()
+            try:
+                await ctx.close()
+            except Exception:
+                pass
 
     async def screenshot(self, url: str, path: str) -> bool:
-        ctx = await self.new_context()
+        ctx = await self._new_context()
         try:
             page = await ctx.new_page()
             await page.goto(url, wait_until="domcontentloaded", timeout=self._timeout_ms)
@@ -153,7 +202,10 @@ class BrowserManager:
             logger.warning("Screenshot failed for %s: %s", url, exc)
             return False
         finally:
-            await ctx.close()
+            try:
+                await ctx.close()
+            except Exception:
+                pass
 
 
 async def dismiss_cookies(page: Page) -> None:
