@@ -39,7 +39,9 @@ class ScraperService:
         self._browser = browser
         self._lock = asyncio.Lock()
 
-    async def analyze_site(self, site: Site) -> AnalysisResult:
+    async def analyze_site(
+        self, site: Site, preference_hint: str = "",
+    ) -> AnalysisResult:
         result = await self._browser.scrape(site.url)
         if not result.success:
             logger.warning("Skipping %s: %s", site.url, result.error)
@@ -56,7 +58,7 @@ class ScraperService:
         zone_str = site.zone.value if site.zone is not Zone.TODAS else ""
 
         combined = await self._ai.analyze_page_and_forms(
-            result.text, result.html, site.url, zone_str,
+            result.text, result.html, site.url, zone_str, preference_hint,
         )
 
         opp_count = 0
@@ -70,6 +72,13 @@ class ScraperService:
                 zone=_parse_zone(data.get("zone", zone_str) or site.zone.value),
                 status=_parse_opp_status(data.get("status", "nueva")),
                 ai_score=data.get("ai_score"),
+                house_type=data.get("house_type"),
+                bedrooms=data.get("bedrooms"),
+                sqm=data.get("sqm"),
+                amenities=data.get("amenities"),
+                protection_type=data.get("protection_type"),
+                availability=data.get("availability"),
+                project_date=data.get("project_date"),
             )
             await self._repo.upsert_opportunity(opp)
             opp_count += 1
@@ -117,12 +126,13 @@ class ScraperService:
             logger.info("All sites recently visited, nothing to analyze")
             return AnalysisSummary()
 
+        pref_hint = _build_preference_hint(await self._repo.get_preferences())
         logger.info("Analyzing %d/%d sites (budget: %d/cycle)", len(sites), len(all_sites), _MAX_SITES_PER_CYCLE)
 
         total_opps = total_forms = errors = 0
         for idx, site in enumerate(sites):
             try:
-                result = await self.analyze_site(site)
+                result = await self.analyze_site(site, pref_hint)
                 total_opps += result.opportunities
                 total_forms += result.forms
                 if result.error:
@@ -167,3 +177,25 @@ def _parse_form_type(raw: str) -> FormType:
         return FormType(raw.lower())
     except ValueError:
         return FormType.CONTACTO
+
+
+def _build_preference_hint(prefs: dict) -> str:
+    if not prefs:
+        return ""
+    parts: list[str] = []
+    if prefs.get("house_types"):
+        parts.append(f"Tipos preferidos: {', '.join(prefs['house_types'])}")
+    pmin, pmax = prefs.get("price_min"), prefs.get("price_max")
+    if pmin or pmax:
+        parts.append(f"Precio: {pmin or '?'} - {pmax or '?'} EUR")
+    if prefs.get("bedrooms_min"):
+        parts.append(f"Minimo {prefs['bedrooms_min']} habitaciones")
+    if prefs.get("sqm_min"):
+        parts.append(f"Minimo {prefs['sqm_min']} m2")
+    if prefs.get("amenities"):
+        parts.append(f"Extras deseados: {', '.join(prefs['amenities'])}")
+    if prefs.get("protection_types"):
+        parts.append(f"Proteccion: {', '.join(prefs['protection_types'])}")
+    if not parts:
+        return ""
+    return "PREFERENCIAS DEL USUARIO:\n" + "\n".join(f"- {p}" for p in parts)

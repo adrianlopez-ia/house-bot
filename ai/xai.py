@@ -1,13 +1,12 @@
-"""Gemini implementation of :class:`AIAnalyzer`."""
+"""xAI (Grok) implementation of :class:`AIAnalyzer`."""
 from __future__ import annotations
 
 import asyncio
 import json
 import logging
-import re
 from typing import Any
 
-from google import genai
+from openai import AsyncOpenAI, RateLimitError
 
 from ai._json_parser import parse_json_array, parse_json_object
 from exceptions import AIAnalysisError
@@ -19,42 +18,45 @@ _MAX_HTML_CHARS = 8_000
 _MAX_CONTEXT_CHARS = 2_000
 
 _MAX_RETRIES = 4
-_BASE_BACKOFF_SECS = 15.0
-_RETRY_DELAY_RE = re.compile(r"retryDelay.*?(\d+)")
+_BASE_BACKOFF_SECS = 5.0
 
 
-def _parse_retry_delay(error_text: str) -> float:
-    """Extract the retry delay from a Gemini 429 error, or use a default."""
-    match = _RETRY_DELAY_RE.search(error_text)
-    if match:
-        return max(float(match.group(1)), _BASE_BACKOFF_SECS)
-    return _BASE_BACKOFF_SECS
+class XAIAnalyzer:
+    """Concrete :class:`AIAnalyzer` backed by xAI Grok models."""
 
-
-class GeminiAnalyzer:
-    """Concrete :class:`AIAnalyzer` backed by Google Gemini."""
+    _BASE_URL = "https://api.x.ai/v1"
 
     def __init__(self, api_key: str, model: str) -> None:
-        self._client = genai.Client(api_key=api_key)
+        self._client = AsyncOpenAI(api_key=api_key, base_url=self._BASE_URL)
         self._model = model
 
     async def _generate(self, prompt: str) -> str:
         last_exc: Exception | None = None
 
         for attempt in range(_MAX_RETRIES + 1):
-            def _call() -> str:
-                response = self._client.models.generate_content(
-                    model=self._model, contents=prompt,
-                )
-                return response.text
-
             try:
-                return await asyncio.to_thread(_call)
+                response = await self._client.chat.completions.create(
+                    model=self._model,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.3,
+                )
+                return response.choices[0].message.content or ""
+            except RateLimitError as exc:
+                last_exc = exc
+                if attempt < _MAX_RETRIES:
+                    wait = _BASE_BACKOFF_SECS * (2 ** attempt)
+                    logger.warning(
+                        "Rate-limited (attempt %d/%d), waiting %.0fs",
+                        attempt + 1, _MAX_RETRIES, wait,
+                    )
+                    await asyncio.sleep(wait)
+                    continue
+                break
             except Exception as exc:
                 last_exc = exc
                 err = str(exc)
                 if "429" in err and attempt < _MAX_RETRIES:
-                    wait = _parse_retry_delay(err) + attempt * 10
+                    wait = _BASE_BACKOFF_SECS * (2 ** attempt)
                     logger.warning(
                         "Rate-limited (attempt %d/%d), waiting %.0fs",
                         attempt + 1, _MAX_RETRIES, wait,
@@ -63,7 +65,7 @@ class GeminiAnalyzer:
                     continue
                 break
 
-        raise AIAnalysisError(f"Gemini generation failed: {last_exc}") from last_exc
+        raise AIAnalysisError(f"xAI generation failed: {last_exc}") from last_exc
 
     # ── protocol methods ───────────────────────────────────────────────
 

@@ -10,6 +10,55 @@ from aiohttp import web
 if TYPE_CHECKING:
     pass
 
+_AI_MODELS = {
+    "xai": [
+        {
+            "id": "grok-3-mini-fast",
+            "name": "Grok 3 Mini Fast",
+            "cost": "$0.10/M in · $0.30/M out",
+            "capacity": "Alta ($25 creditos gratis)",
+            "description": "Rapido y barato. Ideal para analisis masivo.",
+        },
+        {
+            "id": "grok-3-mini",
+            "name": "Grok 3 Mini",
+            "cost": "$0.30/M in · $0.50/M out",
+            "capacity": "Alta ($25 creditos)",
+            "description": "Mejor razonamiento. Algo mas lento.",
+        },
+        {
+            "id": "grok-4.1-fast",
+            "name": "Grok 4.1 Fast",
+            "cost": "$0.20/M in · $0.50/M out",
+            "capacity": "Alta ($25 creditos)",
+            "description": "Modelo reciente de alta calidad.",
+        },
+    ],
+    "gemini": [
+        {
+            "id": "gemini-2.5-flash-lite",
+            "name": "Gemini 2.5 Flash Lite",
+            "cost": "Gratis (20 RPD real)",
+            "capacity": "Muy limitada",
+            "description": "Ligero y rapido. Cuota gratuita muy baja.",
+        },
+        {
+            "id": "gemini-2.5-flash",
+            "name": "Gemini 2.5 Flash",
+            "cost": "Gratis (250 RPD oficial)",
+            "capacity": "Limitada",
+            "description": "Equilibrio velocidad/capacidad.",
+        },
+        {
+            "id": "gemini-2.5-pro",
+            "name": "Gemini 2.5 Pro",
+            "cost": "Gratis (100 RPD oficial)",
+            "capacity": "Limitada",
+            "description": "Mejor razonamiento, menos cuota.",
+        },
+    ],
+}
+
 
 def _json(data: object, status: int = 200) -> web.Response:
     return web.json_response(data, status=status)
@@ -32,6 +81,8 @@ def build_api_routes(container: Any) -> web.RouteTableDef:
     repo = container.repo
     settings = container.settings
     routes = web.RouteTableDef()
+
+    # ── Stats ──────────────────────────────────────────────────────────
 
     @routes.get("/api/stats")
     async def stats(_req: web.Request) -> web.Response:
@@ -69,6 +120,8 @@ def build_api_routes(container: Any) -> web.RouteTableDef:
             "running_actions": {k: v for k, v in _running_actions.items() if v},
         })
 
+    # ── Data ───────────────────────────────────────────────────────────
+
     @routes.get("/api/opportunities")
     async def opportunities(req: web.Request) -> web.Response:
         opps = await repo.get_opportunities()
@@ -102,18 +155,57 @@ def build_api_routes(container: Any) -> web.RouteTableDef:
             data.append(d)
         return _json(data)
 
+    # ── Config & models ────────────────────────────────────────────────
+
     @routes.get("/api/config")
     async def config(_req: web.Request) -> web.Response:
+        provider = settings.ai_provider.lower()
+        model = getattr(container.ai, "_model", settings.xai_model if provider == "xai" else settings.gemini_model)
         return _json({
             "zones": settings.zone_list,
-            "gemini_model": settings.gemini_model,
+            "ai_provider": provider,
+            "ai_model": model,
             "scrape_interval_hours": settings.scrape_interval_hours,
             "discovery_interval_hours": settings.discovery_interval_hours,
             "form_fill_interval_hours": settings.form_fill_interval_hours,
             "playwright_timeout_ms": settings.playwright_timeout_ms,
         })
 
-    # ── Action endpoints (mirror Telegram commands) ────────────────────
+    @routes.get("/api/ai-models")
+    async def ai_models(_req: web.Request) -> web.Response:
+        provider = settings.ai_provider.lower()
+        current = getattr(container.ai, "_model", "")
+        return _json({
+            "provider": provider,
+            "current": current,
+            "models": _AI_MODELS.get(provider, []),
+        })
+
+    @routes.put("/api/ai-model")
+    async def change_model(req: web.Request) -> web.Response:
+        body = await req.json()
+        model = body.get("model", "").strip()
+        if not model:
+            return _json({"error": "model required"}, 400)
+        container.ai._model = model
+        prefs = await repo.get_preferences()
+        prefs["ai_model"] = model
+        await repo.save_preferences(prefs)
+        return _json({"status": "ok", "model": model})
+
+    # ── Preferences ────────────────────────────────────────────────────
+
+    @routes.get("/api/preferences")
+    async def get_prefs(_req: web.Request) -> web.Response:
+        return _json(await repo.get_preferences())
+
+    @routes.put("/api/preferences")
+    async def save_prefs(req: web.Request) -> web.Response:
+        body = await req.json()
+        await repo.save_preferences(body)
+        return _json({"status": "ok"})
+
+    # ── Actions ────────────────────────────────────────────────────────
 
     async def _run_action(name: str, coro: Any) -> dict:
         if _running_actions.get(name):
@@ -172,5 +264,10 @@ def build_api_routes(container: Any) -> web.RouteTableDef:
             }
         r = await _run_action("full-search", _do())
         return _json(r)
+
+    @routes.post("/api/actions/reset-db")
+    async def action_reset(_req: web.Request) -> web.Response:
+        await repo.reset_all()
+        return _json({"status": "ok", "message": "All data deleted"})
 
     return routes

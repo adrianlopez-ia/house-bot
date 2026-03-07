@@ -22,6 +22,7 @@ class AIAnalyzer(Protocol):
 
     async def analyze_page_and_forms(
         self, text: str, html: str, url: str, zone: str,
+        preference_hint: str = "",
     ) -> dict[str, Any]: ...
 
     async def generate_search_queries(

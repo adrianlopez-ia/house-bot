@@ -64,11 +64,26 @@ CREATE TABLE IF NOT EXISTS form_submissions (
     form_type       TEXT    NOT NULL DEFAULT 'contacto'
 );
 
+CREATE TABLE IF NOT EXISTS preferences (
+    id   INTEGER PRIMARY KEY CHECK (id = 1),
+    data TEXT NOT NULL DEFAULT '{}'
+);
+
 CREATE INDEX IF NOT EXISTS idx_sites_active          ON sites(active);
 CREATE INDEX IF NOT EXISTS idx_opportunities_site     ON opportunities(site_id);
 CREATE INDEX IF NOT EXISTS idx_opportunities_status   ON opportunities(status);
 CREATE INDEX IF NOT EXISTS idx_forms_status           ON form_submissions(status);
 """
+
+_OPP_MIGRATIONS = [
+    "ALTER TABLE opportunities ADD COLUMN house_type TEXT",
+    "ALTER TABLE opportunities ADD COLUMN bedrooms INTEGER",
+    "ALTER TABLE opportunities ADD COLUMN sqm REAL",
+    "ALTER TABLE opportunities ADD COLUMN amenities TEXT",
+    "ALTER TABLE opportunities ADD COLUMN protection_type TEXT",
+    "ALTER TABLE opportunities ADD COLUMN availability TEXT",
+    "ALTER TABLE opportunities ADD COLUMN project_date TEXT",
+]
 
 
 class Repository:
@@ -82,6 +97,11 @@ class Repository:
     async def init(self) -> None:
         async with self._conn() as db:
             await db.executescript(_SCHEMA)
+            for ddl in _OPP_MIGRATIONS:
+                try:
+                    await db.execute(ddl)
+                except Exception:
+                    pass
             await db.commit()
         logger.info("Database initialised at %s", self._db_path)
 
@@ -157,19 +177,27 @@ class Repository:
                 opp_id: int = rows[0][0]
                 await db.execute(
                     "UPDATE opportunities SET title=?,description=?,estimated_price=?,"
-                    "zone=?,status=?,ai_score=? WHERE id=?",
+                    "zone=?,status=?,ai_score=?,house_type=?,bedrooms=?,sqm=?,"
+                    "amenities=?,protection_type=?,availability=?,project_date=? "
+                    "WHERE id=?",
                     (opp.title, opp.description, opp.estimated_price,
-                     opp.zone.value, opp.status.value, opp.ai_score, opp_id),
+                     opp.zone.value, opp.status.value, opp.ai_score,
+                     opp.house_type, opp.bedrooms, opp.sqm, opp.amenities,
+                     opp.protection_type, opp.availability, opp.project_date,
+                     opp_id),
                 )
             else:
                 cur = await db.execute(
                     "INSERT INTO opportunities "
                     "(site_id,title,description,estimated_price,zone,status,"
-                    "detected_at,ai_score,url,notified) "
-                    "VALUES (?,?,?,?,?,?,?,?,?,0)",
+                    "detected_at,ai_score,url,notified,house_type,bedrooms,"
+                    "sqm,amenities,protection_type,availability,project_date) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,0,?,?,?,?,?,?,?)",
                     (opp.site_id, opp.title, opp.description, opp.estimated_price,
                      opp.zone.value, opp.status.value, opp.detected_at,
-                     opp.ai_score, opp.url),
+                     opp.ai_score, opp.url, opp.house_type, opp.bedrooms,
+                     opp.sqm, opp.amenities, opp.protection_type,
+                     opp.availability, opp.project_date),
                 )
                 opp_id = cur.lastrowid
             await db.commit()
@@ -289,6 +317,7 @@ class Repository:
 
     @staticmethod
     def _to_opportunity(row: aiosqlite.Row) -> Opportunity:
+        n = len(row)
         return Opportunity(
             id=row[0], site_id=row[1], title=row[2], description=row[3],
             estimated_price=row[4],
@@ -296,6 +325,13 @@ class Repository:
             status=OpportunityStatus(row[6]),
             detected_at=row[7], ai_score=row[8], url=row[9],
             notified=bool(row[10]),
+            house_type=row[11] if n > 11 else None,
+            bedrooms=row[12] if n > 12 else None,
+            sqm=row[13] if n > 13 else None,
+            amenities=row[14] if n > 14 else None,
+            protection_type=row[15] if n > 15 else None,
+            availability=row[16] if n > 16 else None,
+            project_date=row[17] if n > 17 else None,
         )
 
     @staticmethod
@@ -307,3 +343,37 @@ class Repository:
             screenshot_path=row[6], error_message=row[7],
             form_type=FormType(row[8]),
         )
+
+    # ── preferences ────────────────────────────────────────────────────
+
+    async def get_preferences(self) -> dict:
+        import json as _json
+        async with self._conn() as db:
+            rows = await db.execute_fetchall(
+                "SELECT data FROM preferences WHERE id=1",
+            )
+            if rows:
+                return _json.loads(rows[0][0])
+            return {}
+
+    async def save_preferences(self, prefs: dict) -> None:
+        import json as _json
+        data = _json.dumps(prefs, ensure_ascii=False)
+        async with self._conn() as db:
+            await db.execute(
+                "INSERT OR REPLACE INTO preferences (id, data) VALUES (1, ?)",
+                (data,),
+            )
+            await db.commit()
+
+    # ── danger zone ────────────────────────────────────────────────────
+
+    async def reset_all(self) -> None:
+        """Delete ALL data from every table. Use with extreme caution."""
+        async with self._conn() as db:
+            await db.execute("DELETE FROM form_submissions")
+            await db.execute("DELETE FROM opportunities")
+            await db.execute("DELETE FROM sites")
+            await db.execute("DELETE FROM preferences")
+            await db.commit()
+        logger.warning("All data deleted (panic reset)")

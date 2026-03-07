@@ -79,6 +79,13 @@ class Opportunity:
     ai_score: Optional[float] = None
     notified: bool = False
     id: Optional[int] = None
+    house_type: Optional[str] = None
+    bedrooms: Optional[int] = None
+    sqm: Optional[float] = None
+    amenities: Optional[str] = None
+    protection_type: Optional[str] = None
+    availability: Optional[str] = None
+    project_date: Optional[str] = None
 
     def summary(self) -> str:
         safe_title = _escape_md(self.title)

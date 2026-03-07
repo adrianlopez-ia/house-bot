@@ -43,8 +43,13 @@ class Settings(BaseSettings):
     db_path: Path = _BASE_DIR / "house_bot.db"
     screenshots_dir: Path = _BASE_DIR / "screenshots"
 
+    ai_provider: str = "gemini"
+
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.5-flash-lite"
+
+    xai_api_key: str = ""
+    xai_model: str = "grok-3-mini-fast"
 
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
@@ -89,8 +94,13 @@ class Settings(BaseSettings):
     def validate_required(self) -> list[str]:
         """Return a list of missing-but-required configuration keys."""
         errors: list[str] = []
-        if not self.gemini_api_key:
-            errors.append("GEMINI_API_KEY")
+        provider = self.ai_provider.lower()
+        if provider == "xai":
+            if not self.xai_api_key:
+                errors.append("XAI_API_KEY")
+        else:
+            if not self.gemini_api_key:
+                errors.append("GEMINI_API_KEY")
         if not self.telegram_bot_token:
             errors.append("TELEGRAM_BOT_TOKEN")
         if not self.telegram_chat_id:

@@ -72,6 +72,19 @@ async def _start_web_server(container: "_Container") -> web.AppRunner:
     return runner
 
 
+# ── AI provider factory ────────────────────────────────────────────────
+
+def _build_ai_analyzer(settings: Settings) -> object:
+    provider = settings.ai_provider.lower()
+    if provider == "xai":
+        from ai.xai import XAIAnalyzer
+        logger.info("AI provider: xAI (model=%s)", settings.xai_model)
+        return XAIAnalyzer(settings.xai_api_key, settings.xai_model)
+    from ai.gemini import GeminiAnalyzer
+    logger.info("AI provider: Gemini (model=%s)", settings.gemini_model)
+    return GeminiAnalyzer(settings.gemini_api_key, settings.gemini_model)
+
+
 # ── Service container ──────────────────────────────────────────────────
 
 class _Container:
@@ -80,7 +93,6 @@ class _Container:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
 
-        from ai.gemini import GeminiAnalyzer
         from db.repository import Repository
         from discovery.service import DiscoveryService
         from forms.service import FormService
@@ -89,7 +101,7 @@ class _Container:
         from scraper.service import ScraperService
 
         self.repo = Repository(settings.db_path)
-        self.ai = GeminiAnalyzer(settings.gemini_api_key, settings.gemini_model)
+        self.ai = _build_ai_analyzer(settings)
         self.browser = BrowserManager(timeout_ms=settings.playwright_timeout_ms)
 
         self.discovery = DiscoveryService(self.repo)
