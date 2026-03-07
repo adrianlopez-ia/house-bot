@@ -3,7 +3,8 @@
 Coordinates browser scraping, AI analysis, and persistence for each site.
 Supports two modes:
   - Normal: sequential analysis with a single AI provider
-  - Turbo: parallel workers, one per configured AI provider
+  - Turbo: parallel workers, one per configured AI provider, with a
+    shared browser semaphore to keep memory under control
 """
 from __future__ import annotations
 
@@ -28,6 +29,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _MIN_CONTENT_CHARS = 20
+_MAX_CONCURRENT_BROWSERS = 2
 
 
 class ScraperService:
@@ -46,6 +48,7 @@ class ScraperService:
         self._ai = ai
         self._browser = browser
         self._lock = asyncio.Lock()
+        self._browser_sem = asyncio.Semaphore(_MAX_CONCURRENT_BROWSERS)
         self.max_sites_per_cycle = max_sites_per_cycle
         self.delay_between_sites = delay_between_sites
         self.skip_visited_hours = skip_visited_hours
@@ -62,13 +65,12 @@ class ScraperService:
         delay_between_sites: int,
         skip_visited_hours: int,
     ) -> None:
-        """Hot-swap AI provider and capacity settings."""
         self._ai = ai
         self.max_sites_per_cycle = max_sites_per_cycle
         self.delay_between_sites = delay_between_sites
         self.skip_visited_hours = skip_visited_hours
 
-    # ── Single-site analysis (accepts optional AI override) ───────────
+    # ── Single-site analysis ──────────────────────────────────────────
 
     async def analyze_site(
         self,
@@ -78,26 +80,34 @@ class ScraperService:
         ai: AIAnalyzer | None = None,
     ) -> AnalysisResult:
         analyzer = ai or self._ai
-        result = await self._browser.scrape(site.url)
-        if not result.success:
-            logger.warning("Skipping %s: %s", site.url, result.error)
-            return AnalysisResult(error=result.error)
 
-        if len(result.text.strip()) < _MIN_CONTENT_CHARS:
-            logger.info(
-                "Skipping %s: too little content (%d chars)",
-                site.url, len(result.text.strip()),
-            )
+        async with self._browser_sem:
+            scrape_result = await self._browser.scrape(site.url)
+
+        if not scrape_result.success:
+            logger.warning("Skipping %s: %s", site.url, scrape_result.error)
+            return AnalysisResult(error=scrape_result.error)
+
+        if len(scrape_result.text.strip()) < _MIN_CONTENT_CHARS:
             await self._repo.mark_site_visited(site.id)
             return AnalysisResult()
 
         zone_str = site.zone.value if site.zone is not Zone.TODAS else ""
 
         combined = await analyzer.analyze_page_and_forms(
-            result.text, result.html, site.url, zone_str, preference_hint,
+            scrape_result.text, scrape_result.html,
+            site.url, zone_str, preference_hint,
         )
 
-        opp_count = 0
+        opp_count = await self._save_opportunities(site, combined, zone_str)
+        form_count = await self._save_forms(site, combined)
+
+        await self._repo.mark_site_visited(site.id)
+        logger.info("Analyzed %s: %d opps, %d forms", site.name, opp_count, form_count)
+        return AnalysisResult(opportunities=opp_count, forms=form_count)
+
+    async def _save_opportunities(self, site: Site, combined: dict, zone_str: str) -> int:
+        count = 0
         for data in combined.get("opportunities", []):
             opp = Opportunity(
                 site_id=site.id,
@@ -117,30 +127,25 @@ class ScraperService:
                 project_date=data.get("project_date"),
             )
             await self._repo.upsert_opportunity(opp)
-            opp_count += 1
-            logger.info("Opportunity: %s (score=%s)", opp.title, opp.ai_score)
+            count += 1
             _emit({
                 "type": "opportunity_found",
-                "title": opp.title,
-                "score": opp.ai_score,
-                "zone": opp.zone.value,
-                "price": opp.estimated_price,
+                "title": opp.title, "score": opp.ai_score,
+                "zone": opp.zone.value, "price": opp.estimated_price,
             })
+        return count
 
-        form_count = 0
+    async def _save_forms(self, site: Site, combined: dict) -> int:
+        count = 0
         for fdata in combined.get("forms", []):
             form = FormSubmission(
-                site_id=site.id,
-                form_url=site.url,
+                site_id=site.id, form_url=site.url,
                 status=FormStatus.PENDIENTE,
                 form_type=_parse_form_type(fdata.get("form_type", "contacto")),
             )
             await self._repo.upsert_form(form)
-            form_count += 1
-
-        await self._repo.mark_site_visited(site.id)
-        logger.info("Analyzed %s: %d opps, %d forms", site.name, opp_count, form_count)
-        return AnalysisResult(opportunities=opp_count, forms=form_count)
+            count += 1
+        return count
 
     # ── Analyze all ───────────────────────────────────────────────────
 
@@ -161,7 +166,7 @@ class ScraperService:
                 return await self._analyze_turbo(prefs)
             return await self._analyze_sequential(prefs)
 
-    # ── Sequential mode (original) ────────────────────────────────────
+    # ── Sequential mode ───────────────────────────────────────────────
 
     async def _analyze_sequential(self, prefs: dict) -> AnalysisSummary:
         sites = await self._get_pending_sites(self.max_sites_per_cycle)
@@ -177,11 +182,8 @@ class ScraperService:
 
         total_opps = total_forms = errors = 0
         for idx, site in enumerate(sites):
-            _emit({
-                "type": "site_analyzing",
-                "site": site.name, "url": site.url,
-                "index": idx + 1, "total": len(sites),
-            })
+            _emit({"type": "site_analyzing", "site": site.name, "url": site.url,
+                   "index": idx + 1, "total": len(sites)})
             try:
                 result = await self.analyze_site(site, pref_hint)
                 total_opps += result.opportunities
@@ -208,7 +210,7 @@ class ScraperService:
         pool = self._pool
         assert pool is not None
 
-        max_sites = pool.total_capacity()
+        max_sites = min(pool.total_capacity(), 200)
         sites = await self._get_pending_sites(max_sites)
         if not sites:
             logger.info("All sites recently visited, nothing to analyze")
@@ -220,9 +222,10 @@ class ScraperService:
         _emit({"type": "turbo_start", "providers": [e.name for e in entries],
                "sites": len(sites)})
         logger.info(
-            "TURBO: %d sites across %d providers (%s)",
+            "TURBO: %d sites across %d providers (%s), max %d concurrent browsers",
             len(sites), len(entries),
             ", ".join(f"{e.name}({e.rpm}rpm)" for e in entries),
+            _MAX_CONCURRENT_BROWSERS,
         )
 
         queue: asyncio.Queue[Site] = asyncio.Queue()
@@ -243,12 +246,9 @@ class ScraperService:
 
                 async with entry.semaphore:
                     idx = counter.analyzed + counter.errors + 1
-                    _emit({
-                        "type": "site_analyzing",
-                        "site": site.name, "url": site.url,
-                        "index": idx, "total": len(sites),
-                        "provider": entry.name,
-                    })
+                    _emit({"type": "site_analyzing", "site": site.name,
+                           "url": site.url, "index": idx, "total": len(sites),
+                           "provider": entry.name})
                     try:
                         result = await self.analyze_site(
                             site, pref_hint, ai=entry.analyzer,
@@ -264,8 +264,7 @@ class ScraperService:
                         else:
                             _emit({"type": "site_analyzed", "site": site.name,
                                    "opps": result.opportunities,
-                                   "forms": result.forms,
-                                   "provider": entry.name})
+                                   "forms": result.forms, "provider": entry.name})
                     except Exception as exc:
                         err_str = str(exc)
                         is_rl = "429" in err_str or "rate" in err_str.lower()
@@ -283,9 +282,9 @@ class ScraperService:
 
         await asyncio.gather(*(worker(e) for e in entries))
 
-        _emit({"type": "turbo_end",
-               "analyzed": counter.analyzed, "opps": counter.opps,
-               "errors": counter.errors, "pool_status": pool.status()})
+        _emit({"type": "turbo_end", "analyzed": counter.analyzed,
+               "opps": counter.opps, "errors": counter.errors,
+               "pool_status": pool.status()})
         logger.info(
             "TURBO complete: %d analyzed, %d opps, %d forms, %d errors",
             counter.analyzed, counter.opps, counter.forms, counter.errors,
@@ -319,12 +318,10 @@ class _Counter:
 
 def _summary(analyzed: int, opps: int, forms: int, errors: int) -> AnalysisSummary:
     s = AnalysisSummary(
-        sites_analyzed=analyzed,
-        opportunities_found=opps,
-        forms_found=forms,
-        errors=errors,
+        sites_analyzed=analyzed, opportunities_found=opps,
+        forms_found=forms, errors=errors,
     )
-    logger.info("Analysis complete: %d sites, %d opps, %d forms, %d errors",
+    logger.info("Analysis: %d sites, %d opps, %d forms, %d errors",
                 s.sites_analyzed, s.opportunities_found, s.forms_found, s.errors)
     return s
 

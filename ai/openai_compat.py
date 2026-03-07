@@ -17,9 +17,9 @@ from exceptions import AIAnalysisError
 
 logger = logging.getLogger(__name__)
 
-_MAX_PAGE_CHARS = 24_000
-_MAX_HTML_CHARS = 12_000
-_MAX_CONTEXT_CHARS = 3_000
+_MAX_PAGE_CHARS = 16_000
+_MAX_HTML_CHARS = 8_000
+_MAX_CONTEXT_CHARS = 2_000
 
 _MAX_RETRIES = 4
 _BASE_BACKOFF_SECS = 5.0

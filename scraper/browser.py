@@ -96,7 +96,7 @@ class BrowserManager:
 
     # ── high-level helpers ─────────────────────────────────────────────
 
-    async def scrape(self, url: str, *, max_text: int = 50_000, max_html: int = 80_000) -> ScrapeResult:
+    async def scrape(self, url: str, *, max_text: int = 20_000, max_html: int = 12_000) -> ScrapeResult:
         ctx = await self.new_context()
         try:
             page = await ctx.new_page()

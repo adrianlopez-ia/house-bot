@@ -64,8 +64,8 @@ class Settings(BaseSettings):
     max_sites_per_cycle: int = 0
 
     playwright_timeout_ms: int = 30_000
-    max_page_text_chars: int = 50_000
-    max_page_html_chars: int = 80_000
+    max_page_text_chars: int = 20_000
+    max_page_html_chars: int = 12_000
 
     user_full_name: str = ""
     user_email: str = ""
