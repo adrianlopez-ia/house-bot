@@ -1,4 +1,8 @@
-"""xAI (Grok) implementation of :class:`AIAnalyzer`."""
+"""Generic OpenAI-compatible AI analyzer.
+
+Works with any provider that exposes the ``/chat/completions`` endpoint:
+Cerebras, Groq, DeepSeek, Mistral, xAI, and others.
+"""
 from __future__ import annotations
 
 import asyncio
@@ -21,13 +25,11 @@ _MAX_RETRIES = 4
 _BASE_BACKOFF_SECS = 5.0
 
 
-class XAIAnalyzer:
-    """Concrete :class:`AIAnalyzer` backed by xAI Grok models."""
+class OpenAICompatAnalyzer:
+    """AIAnalyzer backed by any OpenAI-compatible API."""
 
-    _BASE_URL = "https://api.x.ai/v1"
-
-    def __init__(self, api_key: str, model: str) -> None:
-        self._client = AsyncOpenAI(api_key=api_key, base_url=self._BASE_URL)
+    def __init__(self, api_key: str, model: str, base_url: str) -> None:
+        self._client = AsyncOpenAI(api_key=api_key, base_url=base_url)
         self._model = model
 
     async def _generate(self, prompt: str) -> str:
@@ -65,7 +67,7 @@ class XAIAnalyzer:
                     continue
                 break
 
-        raise AIAnalysisError(f"xAI generation failed: {last_exc}") from last_exc
+        raise AIAnalysisError(f"AI generation failed: {last_exc}") from last_exc
 
     # ── protocol methods ───────────────────────────────────────────────
 

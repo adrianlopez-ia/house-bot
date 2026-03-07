@@ -22,9 +22,6 @@ from scraper.browser import BrowserManager
 logger = logging.getLogger(__name__)
 
 _MIN_CONTENT_CHARS = 20
-_DELAY_BETWEEN_SITES_SECS = 10
-_MAX_SITES_PER_CYCLE = 10
-_SKIP_IF_VISITED_WITHIN_HOURS = 6
 
 
 class ScraperService:
@@ -33,11 +30,32 @@ class ScraperService:
         repo: Repository,
         ai: AIAnalyzer,
         browser: BrowserManager,
+        *,
+        max_sites_per_cycle: int = 100,
+        delay_between_sites: int = 3,
+        skip_visited_hours: int = 2,
     ) -> None:
         self._repo = repo
         self._ai = ai
         self._browser = browser
         self._lock = asyncio.Lock()
+        self.max_sites_per_cycle = max_sites_per_cycle
+        self.delay_between_sites = delay_between_sites
+        self.skip_visited_hours = skip_visited_hours
+
+    def reconfigure(
+        self,
+        ai: AIAnalyzer,
+        *,
+        max_sites_per_cycle: int,
+        delay_between_sites: int,
+        skip_visited_hours: int,
+    ) -> None:
+        """Hot-swap AI provider and capacity settings."""
+        self._ai = ai
+        self.max_sites_per_cycle = max_sites_per_cycle
+        self.delay_between_sites = delay_between_sites
+        self.skip_visited_hours = skip_visited_hours
 
     async def analyze_site(
         self, site: Site, preference_hint: str = "",
@@ -111,7 +129,7 @@ class ScraperService:
         all_sites = await self._repo.get_active_sites()
         cutoff = (
             datetime.now(timezone.utc)
-            - timedelta(hours=_SKIP_IF_VISITED_WITHIN_HOURS)
+            - timedelta(hours=self.skip_visited_hours)
         ).isoformat()
 
         sites = []
@@ -119,7 +137,7 @@ class ScraperService:
             if s.last_visited and s.last_visited > cutoff:
                 continue
             sites.append(s)
-            if len(sites) >= _MAX_SITES_PER_CYCLE:
+            if len(sites) >= self.max_sites_per_cycle:
                 break
 
         if not sites:
@@ -127,7 +145,11 @@ class ScraperService:
             return AnalysisSummary()
 
         pref_hint = _build_preference_hint(await self._repo.get_preferences())
-        logger.info("Analyzing %d/%d sites (budget: %d/cycle)", len(sites), len(all_sites), _MAX_SITES_PER_CYCLE)
+        logger.info(
+            "Analyzing %d/%d sites (max %d/cycle, skip <%dh, delay %ds)",
+            len(sites), len(all_sites), self.max_sites_per_cycle,
+            self.skip_visited_hours, self.delay_between_sites,
+        )
 
         total_opps = total_forms = errors = 0
         for idx, site in enumerate(sites):
@@ -142,7 +164,7 @@ class ScraperService:
                 errors += 1
 
             if idx < len(sites) - 1:
-                await asyncio.sleep(_DELAY_BETWEEN_SITES_SECS)
+                await asyncio.sleep(self.delay_between_sites)
 
         summary = AnalysisSummary(
             sites_analyzed=len(sites),

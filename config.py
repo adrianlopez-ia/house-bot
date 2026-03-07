@@ -43,22 +43,25 @@ class Settings(BaseSettings):
     db_path: Path = _BASE_DIR / "house_bot.db"
     screenshots_dir: Path = _BASE_DIR / "screenshots"
 
-    ai_provider: str = "gemini"
+    ai_provider: str = "cerebras"
+    ai_model: str = ""
 
-    gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.5-flash-lite"
-
+    cerebras_api_key: str = ""
+    groq_api_key: str = ""
+    deepseek_api_key: str = ""
+    mistral_api_key: str = ""
     xai_api_key: str = ""
-    xai_model: str = "grok-3-mini-fast"
+    gemini_api_key: str = ""
 
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
 
     zones: str = "norte,este,oeste"
 
-    scrape_interval_hours: int = 8
+    scrape_interval_hours: int = 0
     discovery_interval_hours: int = 24
     form_fill_interval_hours: int = 24
+    max_sites_per_cycle: int = 0
 
     playwright_timeout_ms: int = 30_000
     max_page_text_chars: int = 50_000
@@ -93,14 +96,13 @@ class Settings(BaseSettings):
 
     def validate_required(self) -> list[str]:
         """Return a list of missing-but-required configuration keys."""
+        from ai.providers import get_provider
+
         errors: list[str] = []
-        provider = self.ai_provider.lower()
-        if provider == "xai":
-            if not self.xai_api_key:
-                errors.append("XAI_API_KEY")
-        else:
-            if not self.gemini_api_key:
-                errors.append("GEMINI_API_KEY")
+        profile = get_provider(self.ai_provider)
+        key_field = profile["key_field"]
+        if not getattr(self, key_field, ""):
+            errors.append(key_field.upper())
         if not self.telegram_bot_token:
             errors.append("TELEGRAM_BOT_TOKEN")
         if not self.telegram_chat_id:

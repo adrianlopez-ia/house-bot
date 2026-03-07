@@ -18,6 +18,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
+from ai.providers import build_analyzer, get_provider
 from config import Settings, load_settings
 from exceptions import ConfigError
 
@@ -72,19 +73,6 @@ async def _start_web_server(container: "_Container") -> web.AppRunner:
     return runner
 
 
-# ── AI provider factory ────────────────────────────────────────────────
-
-def _build_ai_analyzer(settings: Settings) -> object:
-    provider = settings.ai_provider.lower()
-    if provider == "xai":
-        from ai.xai import XAIAnalyzer
-        logger.info("AI provider: xAI (model=%s)", settings.xai_model)
-        return XAIAnalyzer(settings.xai_api_key, settings.xai_model)
-    from ai.gemini import GeminiAnalyzer
-    logger.info("AI provider: Gemini (model=%s)", settings.gemini_model)
-    return GeminiAnalyzer(settings.gemini_api_key, settings.gemini_model)
-
-
 # ── Service container ──────────────────────────────────────────────────
 
 class _Container:
@@ -100,12 +88,24 @@ class _Container:
         from scraper.browser import BrowserManager
         from scraper.service import ScraperService
 
+        provider = settings.ai_provider.lower()
+        profile = get_provider(provider)
+
         self.repo = Repository(settings.db_path)
-        self.ai = _build_ai_analyzer(settings)
+        self.ai = build_analyzer(provider, settings.ai_model, settings)
         self.browser = BrowserManager(timeout_ms=settings.playwright_timeout_ms)
 
+        max_sites = settings.max_sites_per_cycle or profile["auto_sites_per_cycle"]
+        delay = profile["delay_between_sites"]
+        skip_h = profile["auto_skip_hours"]
+
         self.discovery = DiscoveryService(self.repo)
-        self.scraper = ScraperService(self.repo, self.ai, self.browser)
+        self.scraper = ScraperService(
+            self.repo, self.ai, self.browser,
+            max_sites_per_cycle=max_sites,
+            delay_between_sites=delay,
+            skip_visited_hours=skip_h,
+        )
         self.forms = FormService(
             self.repo, self.ai, self.browser,
             settings.user_data.as_dict(),
@@ -117,6 +117,12 @@ class _Container:
             self.repo,
         )
         self.notifier.set_services(self.discovery, self.scraper, self.forms)
+
+        logger.info(
+            "AI: %s / %s (max %d sites/cycle, %ds delay, skip <%dh)",
+            profile["name"], getattr(self.ai, "_model", "?"),
+            max_sites, delay, skip_h,
+        )
 
     async def startup(self) -> None:
         await self.repo.init()
@@ -202,18 +208,21 @@ async def main() -> None:
 
     web_runner = await _start_web_server(container)
 
-    s = settings
+    profile = get_provider(settings.ai_provider)
+    scrape_h = settings.scrape_interval_hours or profile["auto_interval_hours"]
+    form_h = settings.form_fill_interval_hours
+
     scheduler = AsyncIOScheduler()
     scheduler.add_job(
-        _job_scrape, IntervalTrigger(hours=s.scrape_interval_hours),
+        _job_scrape, IntervalTrigger(hours=scrape_h),
         args=[container], id="scrape", max_instances=1,
     )
     scheduler.add_job(
-        _job_discover, IntervalTrigger(hours=s.discovery_interval_hours),
+        _job_discover, IntervalTrigger(hours=settings.discovery_interval_hours),
         args=[container], id="discover", max_instances=1,
     )
     scheduler.add_job(
-        _job_fill_forms, IntervalTrigger(hours=s.form_fill_interval_hours),
+        _job_fill_forms, IntervalTrigger(hours=form_h),
         args=[container], id="fill_forms", max_instances=1,
     )
     scheduler.add_job(
@@ -223,7 +232,7 @@ async def main() -> None:
     scheduler.start()
     logger.info(
         "Scheduler: scrape=%dh, discover=%dh, forms=%dh, weekly=Mon 09:00",
-        s.scrape_interval_hours, s.discovery_interval_hours, s.form_fill_interval_hours,
+        scrape_h, settings.discovery_interval_hours, form_h,
     )
 
     asyncio.create_task(_initial_run(container))

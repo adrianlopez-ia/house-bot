@@ -3,61 +3,16 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import logging
 from typing import TYPE_CHECKING, Any
 
 from aiohttp import web
 
-if TYPE_CHECKING:
-    pass
+from ai.providers import (
+    PROVIDERS, available_providers, build_analyzer, get_api_key, get_provider,
+)
 
-_AI_MODELS = {
-    "xai": [
-        {
-            "id": "grok-3-mini-fast",
-            "name": "Grok 3 Mini Fast",
-            "cost": "$0.10/M in · $0.30/M out",
-            "capacity": "Alta ($25 creditos gratis)",
-            "description": "Rapido y barato. Ideal para analisis masivo.",
-        },
-        {
-            "id": "grok-3-mini",
-            "name": "Grok 3 Mini",
-            "cost": "$0.30/M in · $0.50/M out",
-            "capacity": "Alta ($25 creditos)",
-            "description": "Mejor razonamiento. Algo mas lento.",
-        },
-        {
-            "id": "grok-4.1-fast",
-            "name": "Grok 4.1 Fast",
-            "cost": "$0.20/M in · $0.50/M out",
-            "capacity": "Alta ($25 creditos)",
-            "description": "Modelo reciente de alta calidad.",
-        },
-    ],
-    "gemini": [
-        {
-            "id": "gemini-2.5-flash-lite",
-            "name": "Gemini 2.5 Flash Lite",
-            "cost": "Gratis (20 RPD real)",
-            "capacity": "Muy limitada",
-            "description": "Ligero y rapido. Cuota gratuita muy baja.",
-        },
-        {
-            "id": "gemini-2.5-flash",
-            "name": "Gemini 2.5 Flash",
-            "cost": "Gratis (250 RPD oficial)",
-            "capacity": "Limitada",
-            "description": "Equilibrio velocidad/capacidad.",
-        },
-        {
-            "id": "gemini-2.5-pro",
-            "name": "Gemini 2.5 Pro",
-            "cost": "Gratis (100 RPD oficial)",
-            "capacity": "Limitada",
-            "description": "Mejor razonamiento, menos cuota.",
-        },
-    ],
-}
+logger = logging.getLogger(__name__)
 
 
 def _json(data: object, status: int = 200) -> web.Response:
@@ -155,43 +110,102 @@ def build_api_routes(container: Any) -> web.RouteTableDef:
             data.append(d)
         return _json(data)
 
-    # ── Config & models ────────────────────────────────────────────────
+    # ── Config & AI providers ──────────────────────────────────────────
 
     @routes.get("/api/config")
     async def config(_req: web.Request) -> web.Response:
         provider = settings.ai_provider.lower()
-        model = getattr(container.ai, "_model", settings.xai_model if provider == "xai" else settings.gemini_model)
+        profile = get_provider(provider)
+        model = getattr(container.ai, "_model", profile["default_model"])
+        scrape_h = settings.scrape_interval_hours or profile["auto_interval_hours"]
         return _json({
             "zones": settings.zone_list,
             "ai_provider": provider,
+            "ai_provider_name": profile["name"],
             "ai_model": model,
-            "scrape_interval_hours": settings.scrape_interval_hours,
+            "rpd": profile["rpd"],
+            "scrape_interval_hours": scrape_h,
             "discovery_interval_hours": settings.discovery_interval_hours,
             "form_fill_interval_hours": settings.form_fill_interval_hours,
             "playwright_timeout_ms": settings.playwright_timeout_ms,
+            "max_sites_per_cycle": container.scraper.max_sites_per_cycle,
+            "delay_between_sites": container.scraper.delay_between_sites,
         })
 
+    @routes.get("/api/providers")
+    async def providers(_req: web.Request) -> web.Response:
+        current_provider = settings.ai_provider.lower()
+        current_model = getattr(container.ai, "_model", "")
+        all_providers = available_providers(settings)
+        return _json({
+            "current_provider": current_provider,
+            "current_model": current_model,
+            "providers": all_providers,
+        })
+
+    @routes.put("/api/ai-config")
+    async def change_ai_config(req: web.Request) -> web.Response:
+        body = await req.json()
+        new_provider = body.get("provider", "").strip().lower()
+        new_model = body.get("model", "").strip()
+
+        if new_provider and new_provider not in PROVIDERS:
+            return _json({"error": f"Unknown provider: {new_provider}"}, 400)
+
+        provider = new_provider or settings.ai_provider.lower()
+        profile = get_provider(provider)
+        api_key = get_api_key(provider, settings)
+
+        if not api_key:
+            return _json({"error": f"No API key configured for {profile['name']}"}, 400)
+
+        model = new_model or profile["default_model"]
+
+        try:
+            new_ai = build_analyzer(provider, model, settings)
+        except Exception as exc:
+            return _json({"error": f"Failed to create analyzer: {exc}"}, 500)
+
+        container.ai = new_ai
+        settings.ai_provider = provider
+
+        container.scraper.reconfigure(
+            new_ai,
+            max_sites_per_cycle=settings.max_sites_per_cycle or profile["auto_sites_per_cycle"],
+            delay_between_sites=profile["delay_between_sites"],
+            skip_visited_hours=profile["auto_skip_hours"],
+        )
+        container.forms._ai = new_ai
+
+        prefs = await repo.get_preferences()
+        prefs["ai_provider"] = provider
+        prefs["ai_model"] = model
+        await repo.save_preferences(prefs)
+
+        logger.info("AI switched to %s / %s", profile["name"], model)
+        return _json({
+            "status": "ok",
+            "provider": provider,
+            "model": model,
+            "max_sites_per_cycle": container.scraper.max_sites_per_cycle,
+        })
+
+    # Keep legacy endpoint for backward compat
     @routes.get("/api/ai-models")
     async def ai_models(_req: web.Request) -> web.Response:
         provider = settings.ai_provider.lower()
         current = getattr(container.ai, "_model", "")
+        profile = get_provider(provider)
         return _json({
             "provider": provider,
             "current": current,
-            "models": _AI_MODELS.get(provider, []),
+            "models": profile["models"],
         })
 
     @routes.put("/api/ai-model")
     async def change_model(req: web.Request) -> web.Response:
         body = await req.json()
-        model = body.get("model", "").strip()
-        if not model:
-            return _json({"error": "model required"}, 400)
-        container.ai._model = model
-        prefs = await repo.get_preferences()
-        prefs["ai_model"] = model
-        await repo.save_preferences(prefs)
-        return _json({"status": "ok", "model": model})
+        return await change_ai_config(req)
 
     # ── Preferences ────────────────────────────────────────────────────
 

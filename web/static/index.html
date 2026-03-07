@@ -227,9 +227,12 @@ footer a{color:var(--accent)}
 .section{padding:24px 0;display:none}
 .section.active{display:block}
 
-.toast{position:fixed;bottom:20px;right:20px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 18px;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.3);z-index:100;transform:translateY(80px);opacity:0;transition:all .3s ease}
-.toast.show{transform:translateY(0);opacity:1}
-.toast.success{border-color:var(--success)}.toast.error{border-color:var(--error)}.toast.warning{border-color:var(--warning)}
+.banner{position:fixed;top:130px;left:50%;transform:translateX(-50%) translateY(-20px);background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 22px;font-size:13px;font-weight:500;box-shadow:0 8px 32px rgba(0,0,0,.35);z-index:100;opacity:0;pointer-events:none;transition:all .3s ease;display:flex;align-items:center;gap:10px;max-width:500px;width:90%}
+.banner.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
+.banner .b-icon{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.banner.success{border-color:var(--success)}.banner.success .b-icon{background:var(--success-muted);color:var(--success)}
+.banner.error{border-color:var(--error)}.banner.error .b-icon{background:var(--error-muted);color:var(--error)}
+.banner.warning{border-color:var(--warning)}.banner.warning .b-icon{background:var(--warning-muted);color:var(--warning)}
 
 .truncate{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .max-w-xs{max-width:180px}
@@ -273,8 +276,7 @@ footer a{color:var(--accent)}
     <button class="tab-btn" data-tab="opportunities">Oportunidades</button>
     <button class="tab-btn" data-tab="sites">Sitios</button>
     <button class="tab-btn" data-tab="forms">Formularios</button>
-    <button class="tab-btn" data-tab="preferences">Preferencias</button>
-    <button class="tab-btn" data-tab="config">Config</button>
+    <button class="tab-btn" data-tab="preferences">&#9881; Preferencias</button>
   </div>
 </nav>
 
@@ -404,11 +406,11 @@ footer a{color:var(--accent)}
     </div>
   </section>
 
-  <!-- PREFERENCES -->
+  <!-- PREFERENCES (includes config, AI provider, danger zone) -->
   <section id="s-preferences" class="section">
     <div class="panel">
       <div class="panel-header">
-        <h3>&#127968; Mis preferencias de busqueda</h3>
+        <h3>&#127968; Preferencias de busqueda</h3>
         <button class="btn btn-primary" onclick="savePrefs()">Guardar preferencias</button>
       </div>
       <div class="panel-body">
@@ -471,23 +473,27 @@ footer a{color:var(--accent)}
         </div>
       </div>
     </div>
-  </section>
 
-  <!-- CONFIG -->
-  <section id="s-config" class="section">
+    <div class="panel">
+      <div class="panel-header">
+        <h3>&#129302; Proveedor y modelo de IA</h3>
+      </div>
+      <div class="panel-body">
+        <div style="margin-bottom:16px">
+          <label style="font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.03em;display:block;margin-bottom:8px">Proveedor</label>
+          <div class="checkbox-group" id="provider-chips"></div>
+        </div>
+        <label style="font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.03em;display:block;margin-bottom:8px">Modelo</label>
+        <div class="model-grid" id="model-grid"></div>
+      </div>
+    </div>
+
     <div class="panel">
       <div class="panel-header"><h3>&#9881; Configuracion del bot</h3></div>
       <div id="config-rows"></div>
     </div>
 
-    <div class="panel" style="margin-top:20px">
-      <div class="panel-header"><h3>&#129302; Modelo de IA</h3></div>
-      <div class="panel-body">
-        <div class="model-grid" id="model-grid"></div>
-      </div>
-    </div>
-
-    <div class="danger-zone" style="margin-top:20px">
+    <div class="danger-zone">
       <div>
         <strong>&#9888; Zona de peligro</strong>
         <p>Eliminar todos los datos de la base de datos. Esta accion no se puede deshacer.</p>
@@ -505,7 +511,7 @@ footer a{color:var(--accent)}
   </div>
 </footer>
 
-<div class="toast" id="toast"></div>
+<div class="banner" id="banner"><span class="b-icon"></span><span class="b-msg"></span></div>
 
 <div class="overlay" id="confirm-overlay">
   <div class="dialog">
@@ -522,7 +528,7 @@ footer a{color:var(--accent)}
 const $=s=>document.querySelector(s);
 const $$=s=>document.querySelectorAll(s);
 
-let S={stats:null,opps:[],sites:[],forms:[],config:null,prefs:{},models:null};
+let S={stats:null,opps:[],sites:[],forms:[],config:null,prefs:{},models:null,providers:null};
 let sortKey='ai_score',sortAsc=false;
 let zoneChart=null,statusChart=null;
 
@@ -542,11 +548,11 @@ async function api(url,opts){const r=await fetch(url,opts);if(!r.ok)throw new Er
 
 async function loadAll(){
   try{
-    const[stats,opps,sites,forms,config,prefs,models]=await Promise.all([
+    const[stats,opps,sites,forms,config,prefs,providers]=await Promise.all([
       api('/api/stats'),api('/api/opportunities'),api('/api/sites'),api('/api/forms'),
-      api('/api/config'),api('/api/preferences'),api('/api/ai-models')
+      api('/api/config'),api('/api/preferences'),api('/api/providers')
     ]);
-    S={stats,opps,sites,forms,config,prefs,models};
+    S={stats,opps,sites,forms,config,prefs,providers};
     render();
     $('#update-time').textContent=new Date().toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
   }catch(e){console.error(e)}
@@ -555,8 +561,11 @@ async function loadAll(){
 async function refreshAll(){
   const btn=$('#refresh-btn');
   btn.classList.add('spinning');
-  await loadAll();
-  setTimeout(()=>btn.classList.remove('spinning'),600);
+  try{
+    await loadAll();
+    toast('Datos actualizados','success');
+  }catch(e){toast('Error actualizando datos','error')}
+  finally{setTimeout(()=>btn.classList.remove('spinning'),600)}
 }
 
 /* ── Actions ── */
@@ -575,7 +584,7 @@ async function runAction(name,label){
 /* ── Render ── */
 function render(){
   renderStats();renderCharts();renderTop();renderOpps();renderSites();renderForms();
-  renderPrefs();renderConfig();renderModels();
+  renderPrefs();renderConfig();renderProviders();
 }
 
 function renderStats(){
@@ -790,15 +799,16 @@ async function savePrefs(){
 /* ── Config ── */
 function renderConfig(){
   const c=S.config;if(!c)return;
-  const provLabel=c.ai_provider==='xai'?'xAI (Grok)':'Google Gemini';
   const rows=[
-    {icon:'\u{1F916}',l:'Proveedor IA',v:provLabel},
+    {icon:'\u{1F916}',l:'Proveedor IA',v:c.ai_provider_name||c.ai_provider},
     {icon:'\u{1F9E0}',l:'Modelo IA',v:c.ai_model},
+    {icon:'\u{1F4CA}',l:'Capacidad',v:c.rpd.toLocaleString()+' RPD'},
     {icon:'\u{1F4CD}',l:'Zonas',v:c.zones.join(', ')},
     {icon:'\u{1F504}',l:'Intervalo scraping',v:c.scrape_interval_hours+'h'},
     {icon:'\u{1F50E}',l:'Intervalo discovery',v:c.discovery_interval_hours+'h'},
     {icon:'\u{1F4DD}',l:'Intervalo formularios',v:c.form_fill_interval_hours+'h'},
-    {icon:'\u23F1',l:'Timeout navegador',v:(c.playwright_timeout_ms/1000)+'s'},
+    {icon:'\u{1F3AF}',l:'Sites por ciclo',v:c.max_sites_per_cycle},
+    {icon:'\u23F1',l:'Delay entre sitios',v:c.delay_between_sites+'s'},
   ];
   $('#config-rows').innerHTML=rows.map(r=>`
     <div class="config-row">
@@ -807,12 +817,28 @@ function renderConfig(){
     </div>`).join('');
 }
 
-/* ── Model Selector ── */
-function renderModels(){
-  const m=S.models;if(!m)return;
+/* ── Provider & Model Selector ── */
+let _viewingProvider=null;
+
+function renderProviders(){
+  const p=S.providers;if(!p)return;
+  if(!_viewingProvider)_viewingProvider=p.current_provider;
+  const chips=$('#provider-chips');
+  chips.innerHTML=p.providers.filter(pr=>pr.configured).map(prov=>{
+    const viewing=prov.id===_viewingProvider;
+    const isCurrent=prov.id===p.current_provider;
+    return`<span class="chip${viewing?' active':''}" data-v="${prov.id}" onclick="viewProvider('${prov.id}')">
+      ${esc(prov.name)}${isCurrent?' \u2713':''}
+      <span style="font-size:10px;opacity:.7;margin-left:2px">${prov.rpd>1000?Math.floor(prov.rpd/1000)+'K':prov.rpd} RPD</span>
+    </span>`}).join('');
+
+  const viewProv=p.providers.find(pr=>pr.id===_viewingProvider);
+  const models=viewProv?viewProv.models:[];
+  const isCurrent=_viewingProvider===p.current_provider;
   const grid=$('#model-grid');
-  grid.innerHTML=m.models.map(mod=>`
-    <div class="model-card${mod.id===m.current?' selected':''}" onclick="selectModel('${mod.id}')">
+  grid.innerHTML=models.map(mod=>{
+    const sel=isCurrent&&mod.id===p.current_model;
+    return`<div class="model-card${sel?' selected':''}" onclick="selectModel('${_viewingProvider}','${mod.id}')">
       <div class="model-radio"></div>
       <div class="model-info">
         <div class="model-name">${esc(mod.name)}</div>
@@ -822,18 +848,20 @@ function renderModels(){
           <span class="model-badge cap">${esc(mod.capacity)}</span>
         </div>
       </div>
-    </div>`).join('');
+    </div>`}).join('');
 }
 
-async function selectModel(id){
+function viewProvider(id){
+  _viewingProvider=id;
+  renderProviders();
+}
+
+async function selectModel(provider,modelId){
   try{
-    await api('/api/ai-model',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:id})});
-    S.models.current=id;
-    renderModels();
-    const[config]=await Promise.all([api('/api/config')]);
-    S.config=config;
-    renderConfig();
-    toast('Modelo cambiado a '+id,'success');
+    const r=await api('/api/ai-config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider,model:modelId})});
+    if(r.error){toast(r.error,'error');return}
+    toast('IA cambiada: '+provider+' / '+modelId+' ('+r.max_sites_per_cycle+' sites/ciclo)','success');
+    await loadAll();
   }catch(e){toast('Error cambiando modelo','error')}
 }
 
@@ -870,10 +898,14 @@ function toggleTheme(){
 }
 (function(){const t=localStorage.getItem('theme');if(t)document.documentElement.setAttribute('data-theme',t)})();
 
-/* ── Toast ── */
+/* ── Banner ── */
+const _ICONS={success:'\u2713',error:'\u2717',warning:'\u26A0'};
 function toast(msg,type){
-  const el=$('#toast');el.textContent=msg;el.className='toast show '+(type||'');
-  clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('show'),3500);
+  const el=$('#banner');
+  el.querySelector('.b-icon').textContent=_ICONS[type]||'\u2139';
+  el.querySelector('.b-msg').textContent=msg;
+  el.className='banner show '+(type||'');
+  clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('show'),4000);
 }
 
 /* ── Init ── */
