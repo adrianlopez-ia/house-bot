@@ -333,6 +333,17 @@ def build_api_routes(container: Any) -> web.RouteTableDef:
             }
         return _json(await _run_bg("full-search", _do))
 
+    @routes.get("/api/pool-status")
+    async def pool_status(_req: web.Request) -> web.Response:
+        pool = getattr(container, "pool", None)
+        if not pool:
+            return _json({"providers": [], "active": 0, "total": 0})
+        return _json({
+            "providers": pool.status(),
+            "active": pool.active_count,
+            "total": pool.size,
+        })
+
     @routes.post("/api/actions/reset-db")
     async def action_reset(_req: web.Request) -> web.Response:
         await repo.reset_all()

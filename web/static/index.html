@@ -215,6 +215,25 @@ tr:hover td{background:var(--bg-card-hover)}
 .model-badge.cost{background:var(--info-muted);color:var(--info)}
 .model-badge.cap{background:var(--success-muted);color:var(--success)}
 
+/* Toggle switch */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 20px}
+.toggle-label{display:flex;flex-direction:column;gap:2px}
+.toggle-label strong{font-size:14px;font-weight:600}
+.toggle-label span{font-size:12px;color:var(--text-muted)}
+.toggle{position:relative;width:48px;height:26px;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0}
+.toggle-track{position:absolute;inset:0;background:var(--border);border-radius:99px;cursor:pointer;transition:background .2s}
+.toggle-track::after{content:'';position:absolute;left:3px;top:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:transform .2s}
+.toggle input:checked+.toggle-track{background:var(--accent)}
+.toggle input:checked+.toggle-track::after{transform:translateX(22px)}
+.pool-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;padding:0 20px 16px}
+.pool-chip{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg-input);font-size:12px}
+.pool-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.pool-dot.ok{background:var(--success)}
+.pool-dot.off{background:var(--error)}
+.pool-name{font-weight:600;flex:1}
+.pool-stat{color:var(--text-muted);font-size:11px}
+
 /* Danger zone */
 .danger-zone{background:var(--danger-muted);border:1px solid var(--danger);border-radius:var(--radius);padding:20px;display:flex;align-items:center;justify-content:space-between;gap:16px}
 .danger-zone p{font-size:13px;color:var(--text-secondary)}
@@ -517,6 +536,20 @@ footer a{color:var(--accent)}
     </div>
 
     <div class="panel">
+      <div class="toggle-row">
+        <div class="toggle-label">
+          <strong>&#9889; Modo Turbo</strong>
+          <span>Usa todos los proveedores de IA en paralelo. Cada uno analiza sitios diferentes para ir mucho mas rapido.</span>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="pref-turbo" onchange="saveTurbo(this.checked)">
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+      <div class="pool-grid" id="pool-grid"></div>
+    </div>
+
+    <div class="panel">
       <div class="panel-header">
         <h3>&#129302; Proveedor y modelo de IA</h3>
       </div>
@@ -812,6 +845,32 @@ function renderPrefs(){
   $('#pref-price-max').value=p.price_max||'';
   $('#pref-beds-min').value=p.bedrooms_min||'';
   $('#pref-sqm-min').value=p.sqm_min||'';
+  const turbo=p.turbo_mode!==undefined?p.turbo_mode:true;
+  $('#pref-turbo').checked=turbo;
+  loadPoolStatus();
+}
+
+async function saveTurbo(on){
+  try{
+    await api('/api/preferences',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({turbo_mode:on})});
+    S.prefs=S.prefs||{};S.prefs.turbo_mode=on;
+    _prefsRenderedJson=JSON.stringify(S.prefs);
+    toast(on?'Modo Turbo activado':'Modo Turbo desactivado','success');
+  }catch(e){toast('Error','error')}
+}
+
+async function loadPoolStatus(){
+  try{
+    const d=await api('/api/pool-status');
+    const grid=$('#pool-grid');
+    if(!d.providers||!d.providers.length){grid.innerHTML='<div style="padding:0 0 12px;font-size:12px;color:var(--text-muted)">Configura API keys de multiples proveedores para habilitar turbo</div>';return}
+    grid.innerHTML=d.providers.map(p=>`
+      <div class="pool-chip">
+        <span class="pool-dot ${p.available?'ok':'off'}"></span>
+        <span class="pool-name">${esc(p.name)}</span>
+        <span class="pool-stat">${p.calls} calls${p.errors?' · '+p.errors+' err':''}</span>
+      </div>`).join('');
+  }catch(e){}
 }
 
 function getChips(id){return[...$('#'+id).querySelectorAll('.chip.active')].map(c=>c.dataset.v)}
@@ -969,6 +1028,8 @@ const _FEED_ICONS={
   site_analyzed:{icon:'\u2713',cls:'found'},
   site_error:{icon:'\u2717',cls:'error'},
   opportunity_found:{icon:'\u2B50',cls:'star'},
+  turbo_start:{icon:'\u26A1',cls:'search'},
+  turbo_end:{icon:'\u26A1',cls:'done'},
 };
 
 const _ACTION_LABELS={'discover':'Descubrir sitios','scrape':'Analizar sitios','fill-forms':'Rellenar formularios','full-search':'Busqueda completa','reset-db':'Reset BBDD'};
@@ -1024,13 +1085,22 @@ function _feedMessage(e){
     case'discovery_found':return`Nuevo sitio: <strong>${esc(e.site)}</strong> <span class="badge badge-${e.zone}">${ZONE_L[e.zone]||e.zone}</span>`;
     case'site_analyzing':{
       updateProgress(e.index,e.total,`Analizando ${e.index}/${e.total}: ${e.site}`);
-      return`Analizando <strong>${esc(e.site)}</strong> (${e.index}/${e.total})`;
+      const prov=e.provider?` <span style="color:var(--text-muted)">[${esc(e.provider)}]</span>`:'';
+      return`Analizando <strong>${esc(e.site)}</strong> (${e.index}/${e.total})${prov}`;
     }
-    case'site_analyzed':return`<strong>${esc(e.site)}</strong> \u2014 ${e.opps} oportunidades, ${e.forms} formularios`;
+    case'site_analyzed':{
+      const prov2=e.provider?` <span style="color:var(--text-muted)">[${esc(e.provider)}]</span>`:'';
+      return`<strong>${esc(e.site)}</strong> \u2014 ${e.opps} oportunidades, ${e.forms} formularios${prov2}`;
+    }
     case'site_error':return`Error en <strong>${esc(e.site)}</strong>: ${esc((e.error||'').substring(0,100))}`;
     case'opportunity_found':{
       const sc=e.score||0;const cls=sc>=7?'score-high':sc>=4?'score-mid':'score-low';
       return`<strong>${esc(e.title)}</strong> <span class="score ${cls}">${sc}/10</span> <span class="badge badge-${e.zone}">${ZONE_L[e.zone]||e.zone}</span> ${e.price?esc(e.price):''}`;
+    }
+    case'turbo_start':return`<strong>\u26A1 TURBO</strong> ${e.sites} sitios con ${e.providers.length} proveedores: ${e.providers.join(', ')}`;
+    case'turbo_end':{
+      loadPoolStatus();
+      return`<strong>\u26A1 TURBO completado</strong> ${e.analyzed} analizados, ${e.opps} oportunidades, ${e.errors} errores`;
     }
     default:return null;
   }

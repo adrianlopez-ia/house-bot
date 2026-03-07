@@ -18,6 +18,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
+from ai.pool import AnalyzerPool
 from ai.providers import build_analyzer, get_provider
 from config import Settings, load_settings
 from exceptions import ConfigError
@@ -99,12 +100,15 @@ class _Container:
         delay = profile["delay_between_sites"]
         skip_h = profile["auto_skip_hours"]
 
+        self.pool = AnalyzerPool(settings)
+
         self.discovery = DiscoveryService(self.repo, ai=self.ai)
         self.scraper = ScraperService(
             self.repo, self.ai, self.browser,
             max_sites_per_cycle=max_sites,
             delay_between_sites=delay,
             skip_visited_hours=skip_h,
+            pool=self.pool,
         )
         self.forms = FormService(
             self.repo, self.ai, self.browser,

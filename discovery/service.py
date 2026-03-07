@@ -78,6 +78,7 @@ class DiscoveryService:
         self, extra_queries: list[dict[str, str]] | None = None,
     ) -> list[Site]:
         prefs = await self._repo.get_preferences()
+        turbo = prefs.get("turbo_mode", True)
 
         queries = list(SEARCH_QUERIES) + (extra_queries or [])
         pref_queries = _build_preference_queries(prefs)
@@ -91,10 +92,14 @@ class DiscoveryService:
         }
         new_sites: list[Site] = []
 
-        found = await self._run_queries(queries, known_domains)
+        if turbo:
+            raw = await self._run_queries_parallel(queries, known_domains)
+        else:
+            raw = await self._run_queries(queries, known_domains)
+        found = await self._persist_and_emit(raw)
         new_sites += found
-        logger.info("Phase 1 (static + preference queries): %d new sites from %d queries",
-                     len(found), len(queries))
+        logger.info("Phase 1 (%s): %d new sites from %d queries",
+                     "parallel" if turbo else "sequential", len(found), len(queries))
 
         if self._ai and hasattr(self._ai, "generate_search_queries"):
             try:
@@ -107,7 +112,11 @@ class DiscoveryService:
                 )
                 if ai_queries:
                     logger.info("AI generated %d extra queries", len(ai_queries))
-                    found_ai = await self._run_queries(ai_queries, known_domains)
+                    if turbo:
+                        raw_ai = await self._run_queries_parallel(ai_queries, known_domains)
+                    else:
+                        raw_ai = await self._run_queries(ai_queries, known_domains)
+                    found_ai = await self._persist_and_emit(raw_ai)
                     new_sites += found_ai
                     logger.info("Phase 2 (AI queries): %d new sites from %d queries",
                                 len(found_ai), len(ai_queries))
@@ -117,13 +126,15 @@ class DiscoveryService:
         logger.info("Discovery complete: %d total new sites", len(new_sites))
         return new_sites
 
+    # ── Sequential query runner ───────────────────────────────────────
+
     async def _run_queries(
         self,
         queries: list[dict[str, str]],
         known_domains: set[str],
     ) -> list[Site]:
         new_sites: list[Site] = []
-
+        total = len(queries)
         for qi, q in enumerate(queries):
             query_text = q.get("query", "")
             if not query_text:
@@ -131,43 +142,97 @@ class DiscoveryService:
             _emit({
                 "type": "discovery_searching",
                 "query": query_text, "zone": q.get("zone", "todas"),
-                "index": qi + 1, "total": len(queries),
+                "index": qi + 1, "total": total,
             })
-            results = await _search_ddg(query_text)
-            for hit in results:
-                url: str = hit.get("href", "")
-                if not url:
-                    continue
-                domain = urlparse(url).netloc.replace("www.", "")
-                if domain in _EXCLUDED_DOMAINS or domain in known_domains:
-                    continue
-
-                title = hit.get("title", "")
-                body = hit.get("body", "")
-                if not _is_relevant(url, title, body):
-                    logger.debug("Filtered irrelevant: %s", url)
-                    continue
-
-                site = Site(
-                    url=url,
-                    name=title[:120] or domain,
-                    zone=_parse_zone(q.get("zone", "")),
-                    site_type=_guess_type(title, body),
-                )
-                site_id = await self._repo.upsert_site(site)
-                new_sites.append(Site(
-                    url=site.url, name=site.name, zone=site.zone,
-                    site_type=site.site_type, id=site_id,
-                ))
-                known_domains.add(domain)
-                logger.info("Discovered: %s -> %s", site.name, url)
-                _emit({
-                    "type": "discovery_found",
-                    "site": site.name, "url": url,
-                    "zone": site.zone.value,
-                })
-
+            hits = await _search_ddg(query_text)
+            new_sites += self._process_hits(hits, q, known_domains)
         return new_sites
+
+    # ── Parallel query runner (turbo) ─────────────────────────────────
+
+    async def _run_queries_parallel(
+        self,
+        queries: list[dict[str, str]],
+        known_domains: set[str],
+        max_concurrent: int = 6,
+    ) -> list[Site]:
+        sem = asyncio.Semaphore(max_concurrent)
+        total = len(queries)
+        completed = 0
+
+        async def _search_one(qi: int, q: dict[str, str]) -> list[dict]:
+            nonlocal completed
+            query_text = q.get("query", "")
+            if not query_text:
+                return []
+            async with sem:
+                _emit({
+                    "type": "discovery_searching",
+                    "query": query_text, "zone": q.get("zone", "todas"),
+                    "index": qi + 1, "total": total,
+                })
+                result = await _search_ddg(query_text)
+                completed += 1
+                return result
+
+        tasks = [_search_one(i, q) for i, q in enumerate(queries)]
+        batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        new_sites: list[Site] = []
+        for i, result in enumerate(batch_results):
+            if isinstance(result, Exception):
+                logger.warning("Parallel DDG error for query %d: %s", i, result)
+                continue
+            new_sites += self._process_hits(result, queries[i], known_domains)
+
+        logger.info("Parallel discovery: %d queries -> %d new sites",
+                     total, len(new_sites))
+        return new_sites
+
+    # ── Shared hit processing ─────────────────────────────────────────
+
+    def _process_hits(
+        self,
+        hits: list[dict],
+        q: dict[str, str],
+        known_domains: set[str],
+    ) -> list[Site]:
+        """Synchronous part: filter hits, build Site objects. DB writes are deferred."""
+        new: list[Site] = []
+        for hit in hits:
+            url: str = hit.get("href", "")
+            if not url:
+                continue
+            domain = urlparse(url).netloc.replace("www.", "")
+            if domain in _EXCLUDED_DOMAINS or domain in known_domains:
+                continue
+            title = hit.get("title", "")
+            body = hit.get("body", "")
+            if not _is_relevant(url, title, body):
+                continue
+            site = Site(
+                url=url,
+                name=title[:120] or domain,
+                zone=_parse_zone(q.get("zone", "")),
+                site_type=_guess_type(title, body),
+            )
+            new.append(site)
+            known_domains.add(domain)
+        return new
+
+    async def _persist_and_emit(self, sites: list[Site]) -> list[Site]:
+        """Save discovered sites to DB and emit events."""
+        result: list[Site] = []
+        for site in sites:
+            site_id = await self._repo.upsert_site(site)
+            result.append(Site(
+                url=site.url, name=site.name, zone=site.zone,
+                site_type=site.site_type, id=site_id,
+            ))
+            logger.info("Discovered: %s -> %s", site.name, site.url)
+            _emit({"type": "discovery_found", "site": site.name,
+                   "url": site.url, "zone": site.zone.value})
+        return result
 
 
 def _build_preference_queries(prefs: dict) -> list[dict[str, str]]:
