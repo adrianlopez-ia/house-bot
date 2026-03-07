@@ -1032,17 +1032,34 @@ function clearFeed(){
 }
 
 let _evtSource=null;
+let _sseRetryMs=1000;
 function connectSSE(){
-  if(_evtSource)_evtSource.close();
-  _evtSource=new EventSource('/api/events');
-  _evtSource.onopen=()=>{$('#sse-dot').classList.add('connected')};
-  _evtSource.onerror=()=>{
-    $('#sse-dot').classList.remove('connected');
-    setTimeout(connectSSE,5000);
+  if(_evtSource){_evtSource.close();_evtSource=null}
+  const es=new EventSource('/api/events');
+  _evtSource=es;
+  es.onopen=()=>{
+    console.log('[SSE] connected');
+    $('#sse-dot').classList.add('connected');
+    _sseRetryMs=1000;
   };
-  _evtSource.onmessage=(msg)=>{
+  es.onerror=(e)=>{
+    console.warn('[SSE] error, readyState=',es.readyState);
+    $('#sse-dot').classList.remove('connected');
+    es.close();
+    _evtSource=null;
+    _sseRetryMs=Math.min(_sseRetryMs*2,30000);
+    setTimeout(connectSSE,_sseRetryMs);
+  };
+  es.onmessage=(msg)=>{
     try{
       const evt=JSON.parse(msg.data);
+      console.log('[SSE] event:',evt.type);
+      if(evt.type==='connected'){
+        if(evt.running&&Object.keys(evt.running).length){
+          addFeedItem({type:'action_start',action:Object.keys(evt.running)[0]});
+        }
+        return;
+      }
       addFeedItem(evt);
       if(evt.type==='action_complete'||evt.type==='action_error'){
         const btn=_activeButtons[evt.action];
@@ -1053,7 +1070,7 @@ function connectSSE(){
         if(evt.type==='action_complete')toast((_ACTION_LABELS[evt.action]||evt.action)+' completado','success');
         else toast('Error: '+(evt.error||''),'error');
       }
-    }catch(e){console.error('SSE parse error',e)}
+    }catch(e){console.error('[SSE] parse error',e,msg.data)}
   };
 }
 

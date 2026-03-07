@@ -234,17 +234,36 @@ def build_api_routes(container: Any) -> web.RouteTableDef:
                 "X-Accel-Buffering": "no",
             },
         )
+        resp.enable_chunked_encoding()
         await resp.prepare(req)
+
+        # Send initial padding + connected event to flush proxy buffers
+        await resp.write(b": " + b" " * 2048 + b"\n\n")
+        connected_evt = format_sse({
+            "type": "connected",
+            "running": {k: v for k, v in _running_actions.items() if v},
+        })
+        await resp.write(connected_evt.encode())
+        await resp.drain()
 
         q = subscribe()
         try:
             while True:
                 try:
-                    event = await asyncio.wait_for(q.get(), timeout=30)
+                    event = await asyncio.wait_for(q.get(), timeout=15)
                     await resp.write(format_sse(event).encode())
+                    await resp.drain()
                 except asyncio.TimeoutError:
-                    await resp.write(b": keepalive\n\n")
-                except ConnectionResetError:
+                    try:
+                        await resp.write(b": ping\n\n")
+                        await resp.drain()
+                    except (ConnectionResetError, ConnectionError):
+                        break
+                except (ConnectionResetError, ConnectionError,
+                        asyncio.CancelledError):
+                    break
+                except Exception:
+                    logger.exception("SSE write error")
                     break
         finally:
             unsubscribe(q)

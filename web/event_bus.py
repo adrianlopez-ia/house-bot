@@ -17,16 +17,20 @@ _subscribers: list[asyncio.Queue[dict[str, Any]]] = []
 
 def emit(event: dict[str, Any]) -> None:
     event.setdefault("ts", time.time())
-    for q in _subscribers:
+    n = len(_subscribers)
+    for q in list(_subscribers):
         try:
             q.put_nowait(event)
         except asyncio.QueueFull:
             pass
+    if n:
+        logger.debug("Event %s -> %d subscribers", event.get("type"), n)
 
 
 def subscribe() -> asyncio.Queue[dict[str, Any]]:
     q: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=256)
     _subscribers.append(q)
+    logger.info("SSE subscriber added (total: %d)", len(_subscribers))
     return q
 
 
@@ -35,6 +39,7 @@ def unsubscribe(q: asyncio.Queue[dict[str, Any]]) -> None:
         _subscribers.remove(q)
     except ValueError:
         pass
+    logger.info("SSE subscriber removed (total: %d)", len(_subscribers))
 
 
 def format_sse(event: dict[str, Any]) -> str:
