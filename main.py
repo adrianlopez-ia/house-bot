@@ -92,7 +92,11 @@ class _Container:
         provider = settings.ai_provider.lower()
         profile = get_provider(provider)
 
-        self.repo = Repository(settings.db_path)
+        self.repo = Repository(
+            settings.db_path,
+            turso_url=settings.turso_url,
+            turso_auth_token=settings.turso_auth_token,
+        )
         self.ai = build_analyzer(provider, settings.ai_model, settings)
         self.browser = BrowserManager(timeout_ms=settings.playwright_timeout_ms)
 

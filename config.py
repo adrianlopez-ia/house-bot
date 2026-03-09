@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     db_path: Path = _BASE_DIR / "house_bot.db"
     screenshots_dir: Path = _BASE_DIR / "screenshots"
 
+    turso_url: str = ""
+    turso_auth_token: str = ""
+
     ai_provider: str = "deepseek"
     ai_model: str = ""
 
