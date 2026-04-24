@@ -35,6 +35,13 @@ def _setup_logging() -> None:
             logging.FileHandler("house_bot.log", encoding="utf-8"),
         ],
     )
+    # Silence HTTP clients to prevent API keys and tokens from leaking in logs
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("aiohttp.access").setLevel(logging.WARNING)
+    logging.getLogger("aiohttp.client").setLevel(logging.WARNING)
+    logging.getLogger("telegram").setLevel(logging.WARNING)
+    logging.getLogger("apscheduler").setLevel(logging.WARNING)
 
 
 # ── Web server (dashboard + API + health check) ───────────────────────
