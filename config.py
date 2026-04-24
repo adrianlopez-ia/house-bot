@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     mistral_api_key: str = ""
     xai_api_key: str = ""
     gemini_api_key: str = ""
+    openrouter_api_key: str = ""
 
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""

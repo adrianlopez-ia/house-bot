@@ -247,8 +247,18 @@ async def main() -> None:
 
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, stop.set)
+    
+    def shutdown_handler(*args):
+        logger.info("Received stop signal")
+        # Ensure we set the event in the asyncio loop thread safely
+        loop.call_soon_threadsafe(stop.set)
+
+    if sys.platform == "win32":
+        signal.signal(signal.SIGINT, shutdown_handler)
+        signal.signal(signal.SIGTERM, shutdown_handler)
+    else:
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(sig, shutdown_handler)
 
     logger.info("Bot running. Press Ctrl+C to stop.")
     await stop.wait()

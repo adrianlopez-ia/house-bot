@@ -90,48 +90,50 @@ _OPP_MIGRATIONS = [
 # ── Thin async wrapper for libsql_experimental ────────────────────────
 
 class _TursoConn:
-    """Async wrapper around the sync ``libsql_experimental`` connection."""
+    """Async wrapper around the ``libsql_client`` connection."""
 
     def __init__(self, url: str, auth_token: str) -> None:
         self._url = url
         self._token = auth_token
-        self._conn: Any = None
+        self._client: Any = None
         self._lock = asyncio.Lock()
 
     async def _get(self) -> Any:
-        if self._conn is None:
-            import libsql_experimental as libsql
-            self._conn = await asyncio.to_thread(
-                libsql.connect, self._url, auth_token=self._token,
+        if self._client is None:
+            import libsql_client
+            self._client = libsql_client.create_client(
+                url=self._url, auth_token=self._token
             )
-        return self._conn
+        return self._client
 
     async def execute(self, sql: str, params: Sequence = ()) -> Any:
-        conn = await self._get()
-        return await asyncio.to_thread(conn.execute, sql, tuple(params))
+        client = await self._get()
+        result = await client.execute(sql, list(params))
+        class MockCursor:
+            lastrowid = result.last_insert_rowid
+        return MockCursor()
 
     async def execute_fetchall(self, sql: str, params: Sequence = ()) -> list[tuple]:
-        conn = await self._get()
-        def _run():
-            cur = conn.execute(sql, tuple(params))
-            return cur.fetchall()
-        return await asyncio.to_thread(_run)
+        client = await self._get()
+        result = await client.execute(sql, list(params))
+        return [tuple(row) for row in result.rows]
 
     async def executescript(self, script: str) -> None:
-        conn = await self._get()
-        await asyncio.to_thread(conn.executescript, script)
+        client = await self._get()
+        statements = [s.strip() for s in script.split(';') if s.strip()]
+        if statements:
+            await client.batch(statements)
 
     async def commit(self) -> None:
-        conn = await self._get()
-        await asyncio.to_thread(conn.commit)
+        pass
 
     async def close(self) -> None:
-        if self._conn:
+        if self._client:
             try:
-                self._conn.close()
+                await self._client.close()
             except Exception:
                 pass
-            self._conn = None
+            self._client = None
 
 
 class _SqliteConn:

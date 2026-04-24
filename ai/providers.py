@@ -40,7 +40,9 @@ PROVIDERS: dict[str, dict[str, Any]] = {
         "key_field": "groq_api_key",
         "models": [
             {"id": "llama-3.3-70b-versatile", "name": "Llama 3.3 70B", "cost": "Gratis", "capacity": "1,000 RPD · 30 RPM", "description": "El mas capaz en Groq gratis."},
+            {"id": "deepseek-r1-distill-llama-70b", "name": "DeepSeek R1 Llama 70B", "cost": "Gratis", "capacity": "Alta", "description": "Modelo de razonamiento super veloz en Groq."},
             {"id": "llama-3.1-8b-instant", "name": "Llama 3.1 8B Instant", "cost": "Gratis", "capacity": "14,400 RPD · 30 RPM", "description": "Ultrarapido. Maximo volumen."},
+            {"id": "mixtral-8x7b-32768", "name": "Mixtral 8x7B", "cost": "Gratis", "capacity": "Alta", "description": "Excelente ventana de contexto de 32k."}
         ],
     },
     "deepseek": {
@@ -107,6 +109,24 @@ PROVIDERS: dict[str, dict[str, Any]] = {
             {"id": "gemini-2.5-flash-lite", "name": "Gemini 2.5 Flash Lite", "cost": "Gratis (20 RPD real)", "capacity": "Muy limitada · 5 RPM", "description": "Cuota gratuita muy baja."},
             {"id": "gemini-2.5-flash", "name": "Gemini 2.5 Flash", "cost": "Gratis (250 RPD oficial)", "capacity": "Limitada · 15 RPM", "description": "Mejor equilibrio."},
             {"id": "gemini-2.5-pro", "name": "Gemini 2.5 Pro", "cost": "Gratis (100 RPD oficial)", "capacity": "Limitada · 2 RPM", "description": "Mejor razonamiento."},
+        ],
+    },
+    "openrouter": {
+        "name": "OpenRouter",
+        "base_url": "https://openrouter.ai/api/v1",
+        "default_model": "meta-llama/llama-3.3-70b-instruct:free",
+        "rpd": 10_000,
+        "rpm": 60,
+        "auto_sites_per_cycle": 60,
+        "auto_interval_hours": 3,
+        "auto_skip_hours": 3,
+        "delay_between_sites": 2,
+        "key_field": "openrouter_api_key",
+        "models": [
+            {"id": "meta-llama/llama-3.3-70b-instruct:free", "name": "Llama 3.3 70B", "cost": "Gratis", "capacity": "Alta", "description": "Uno de los mejores modelos open source del mundo."},
+            {"id": "nousresearch/hermes-3-llama-3.1-405b:free", "name": "Hermes 3 Llama 405B", "cost": "Gratis", "capacity": "Media", "description": "Modelo de 405B muy potente."},
+            {"id": "qwen/qwen3-next-80b-a3b-instruct:free", "name": "Qwen3 Next 80B", "cost": "Gratis", "capacity": "Alta", "description": "Modelo rapido y potente de Alibaba."},
+            {"id": "openrouter/free", "name": "OpenRouter Auto-Free", "cost": "Gratis", "capacity": "Muy Alta", "description": "Elige automaticamente el mejor modelo gratis disponible."}
         ],
     },
 }
