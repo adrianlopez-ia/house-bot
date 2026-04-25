@@ -141,6 +141,12 @@ class _Container:
 
     async def startup(self) -> None:
         await self.repo.init()
+        # Add a small random jitter (5-15s) to prevent 409 conflicts during 
+        # Render's blue-green deployment overlaps.
+        import random
+        delay = random.uniform(5, 15)
+        logger.info("Waiting %.1fs before starting Telegram polling...", delay)
+        await asyncio.sleep(delay)
         await self.notifier.start()
 
     async def shutdown(self) -> None:
@@ -197,9 +203,10 @@ async def _job_weekly(c: _Container) -> None:
 async def _initial_run(c: _Container) -> None:
     logger.info("Initial run start")
     await c.discovery.load_seeds()
-    await c.discovery.discover()
+    # Discovery deferred to scheduled job or manual trigger to save AI quota
+    # and prevent 429 errors on restart.
     await c.notifier.send_new_alerts()
-    logger.info("Initial run complete (scrape deferred to scheduled job)")
+    logger.info("Initial run complete")
 
 
 # ── Entry point ────────────────────────────────────────────────────────

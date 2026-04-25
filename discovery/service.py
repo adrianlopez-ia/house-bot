@@ -32,6 +32,15 @@ _EXCLUDED_DOMAINS = frozenset({
     "scribd.com", "zhihu.com", "se-escribe.com",
     "idealista.com", "www.idealista.com",
     "alltrails.com", "moovitapp.com",
+    "ifema.es", "trivago.es", "hoteles.com", "selectra.es",
+    "20minutos.es", "lavanguardia.com", "monbus.es", "elicebergdemadrid.com",
+    "madridnorte24horas.com", "latribunademadridnorte.com",
+})
+
+_NEGATIVE_KEYWORDS = frozenset({
+    "diccionario", "definicion", "significado", "hotel", "viaje", "autobus",
+    "alarma", "colegio", "escuela", "empleo", "trabajo", "curriculum",
+    "vuelos", "reserva", "vacaciones", "escuelas infantiles",
 })
 
 _REQUIRED_KEYWORDS = frozenset({
@@ -292,7 +301,19 @@ def _is_relevant(url: str, title: str, body: str) -> bool:
         return False
 
     text = f"{title} {body}".lower()
-    return any(kw in text for kw in _REQUIRED_KEYWORDS)
+
+    # Reject if any negative keyword is present
+    if any(nk in text for nk in _NEGATIVE_KEYWORDS):
+        return False
+
+    # High-value keywords count for more
+    high_value = {"cooperativa", "obra nueva", "vpo", "vppl", "promocion", "constructora"}
+    if any(hw in text for hw in high_value):
+        return True
+
+    # Otherwise require at least two relevant keywords
+    count = sum(1 for kw in _REQUIRED_KEYWORDS if kw in text)
+    return count >= 2
 
 
 async def _search_ddg(query: str, max_results: int = 25) -> list[dict]:

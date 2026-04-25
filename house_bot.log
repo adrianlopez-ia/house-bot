@@ -32660,3 +32660,363 @@ Traceback (most recent call last):
   File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\request\_baserequest.py", line 375, in _request_wrapper
     raise exception
 telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2026-04-25 21:35:03,625 [INFO] httpx: HTTP Request: POST https://api.telegram.org/bot7983427325:AAG_3bxOE4uburw2ROGhKxh26os3rnC1pNY/getUpdates "HTTP/1.1 409 Conflict"
+2026-04-25 21:35:03,626 [ERROR] telegram.ext.Updater: Exception happened while polling for updates.
+Traceback (most recent call last):
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 161, in network_retry_loop
+    await do_action()
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 154, in do_action
+    action_cb_task.result()
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_extbot.py", line 672, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\_bot.py", line 4865, in get_updates
+    await self._post(
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\_bot.py", line 704, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_extbot.py", line 370, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\_bot.py", line 733, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\request\_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2026-04-25 21:35:37,827 [INFO] httpx: HTTP Request: POST https://api.telegram.org/bot7983427325:AAG_3bxOE4uburw2ROGhKxh26os3rnC1pNY/getUpdates "HTTP/1.1 409 Conflict"
+2026-04-25 21:35:37,828 [ERROR] telegram.ext.Updater: Exception happened while polling for updates.
+Traceback (most recent call last):
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 161, in network_retry_loop
+    await do_action()
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 154, in do_action
+    action_cb_task.result()
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_extbot.py", line 672, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\_bot.py", line 4865, in get_updates
+    await self._post(
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\_bot.py", line 704, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_extbot.py", line 370, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\_bot.py", line 733, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\request\_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2026-04-25 21:36:12,034 [INFO] httpx: HTTP Request: POST https://api.telegram.org/bot7983427325:AAG_3bxOE4uburw2ROGhKxh26os3rnC1pNY/getUpdates "HTTP/1.1 409 Conflict"
+2026-04-25 21:36:12,036 [ERROR] telegram.ext.Updater: Exception happened while polling for updates.
+Traceback (most recent call last):
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 161, in network_retry_loop
+    await do_action()
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 154, in do_action
+    action_cb_task.result()
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_extbot.py", line 672, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\_bot.py", line 4865, in get_updates
+    await self._post(
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\_bot.py", line 704, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_extbot.py", line 370, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\_bot.py", line 733, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\request\_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2026-04-25 21:36:46,200 [INFO] httpx: HTTP Request: POST https://api.telegram.org/bot7983427325:AAG_3bxOE4uburw2ROGhKxh26os3rnC1pNY/getUpdates "HTTP/1.1 409 Conflict"
+2026-04-25 21:36:46,202 [ERROR] telegram.ext.Updater: Exception happened while polling for updates.
+Traceback (most recent call last):
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 161, in network_retry_loop
+    await do_action()
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 154, in do_action
+    action_cb_task.result()
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_extbot.py", line 672, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\_bot.py", line 4865, in get_updates
+    await self._post(
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\_bot.py", line 704, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_extbot.py", line 370, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\_bot.py", line 733, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\request\_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2026-04-25 21:37:20,431 [INFO] httpx: HTTP Request: POST https://api.telegram.org/bot7983427325:AAG_3bxOE4uburw2ROGhKxh26os3rnC1pNY/getUpdates "HTTP/1.1 409 Conflict"
+2026-04-25 21:37:20,431 [ERROR] telegram.ext.Updater: Exception happened while polling for updates.
+Traceback (most recent call last):
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 161, in network_retry_loop
+    await do_action()
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 154, in do_action
+    action_cb_task.result()
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_extbot.py", line 672, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\_bot.py", line 4865, in get_updates
+    await self._post(
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\_bot.py", line 704, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_extbot.py", line 370, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\_bot.py", line 733, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\request\_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2026-04-25 21:37:54,636 [INFO] httpx: HTTP Request: POST https://api.telegram.org/bot7983427325:AAG_3bxOE4uburw2ROGhKxh26os3rnC1pNY/getUpdates "HTTP/1.1 409 Conflict"
+2026-04-25 21:37:54,637 [ERROR] telegram.ext.Updater: Exception happened while polling for updates.
+Traceback (most recent call last):
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 161, in network_retry_loop
+    await do_action()
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 154, in do_action
+    action_cb_task.result()
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_extbot.py", line 672, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\_bot.py", line 4865, in get_updates
+    await self._post(
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\_bot.py", line 704, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_extbot.py", line 370, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\_bot.py", line 733, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\request\_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2026-04-25 21:38:28,837 [INFO] httpx: HTTP Request: POST https://api.telegram.org/bot7983427325:AAG_3bxOE4uburw2ROGhKxh26os3rnC1pNY/getUpdates "HTTP/1.1 409 Conflict"
+2026-04-25 21:38:28,837 [ERROR] telegram.ext.Updater: Exception happened while polling for updates.
+Traceback (most recent call last):
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 161, in network_retry_loop
+    await do_action()
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 154, in do_action
+    action_cb_task.result()
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_extbot.py", line 672, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\_bot.py", line 4865, in get_updates
+    await self._post(
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\_bot.py", line 704, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_extbot.py", line 370, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\_bot.py", line 733, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\request\_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2026-04-25 21:39:03,020 [INFO] httpx: HTTP Request: POST https://api.telegram.org/bot7983427325:AAG_3bxOE4uburw2ROGhKxh26os3rnC1pNY/getUpdates "HTTP/1.1 409 Conflict"
+2026-04-25 21:39:03,022 [ERROR] telegram.ext.Updater: Exception happened while polling for updates.
+Traceback (most recent call last):
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 161, in network_retry_loop
+    await do_action()
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 154, in do_action
+    action_cb_task.result()
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_extbot.py", line 672, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\_bot.py", line 4865, in get_updates
+    await self._post(
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\_bot.py", line 704, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_extbot.py", line 370, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\_bot.py", line 733, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\request\_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2026-04-25 21:39:37,241 [INFO] httpx: HTTP Request: POST https://api.telegram.org/bot7983427325:AAG_3bxOE4uburw2ROGhKxh26os3rnC1pNY/getUpdates "HTTP/1.1 409 Conflict"
+2026-04-25 21:39:37,243 [ERROR] telegram.ext.Updater: Exception happened while polling for updates.
+Traceback (most recent call last):
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 161, in network_retry_loop
+    await do_action()
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 154, in do_action
+    action_cb_task.result()
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_extbot.py", line 672, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\_bot.py", line 4865, in get_updates
+    await self._post(
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\_bot.py", line 704, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_extbot.py", line 370, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\_bot.py", line 733, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\request\_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2026-04-25 21:40:11,446 [INFO] httpx: HTTP Request: POST https://api.telegram.org/bot7983427325:AAG_3bxOE4uburw2ROGhKxh26os3rnC1pNY/getUpdates "HTTP/1.1 409 Conflict"
+2026-04-25 21:40:11,449 [ERROR] telegram.ext.Updater: Exception happened while polling for updates.
+Traceback (most recent call last):
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 161, in network_retry_loop
+    await do_action()
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 154, in do_action
+    action_cb_task.result()
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_extbot.py", line 672, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\_bot.py", line 4865, in get_updates
+    await self._post(
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\_bot.py", line 704, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_extbot.py", line 370, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\_bot.py", line 733, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\request\_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2026-04-25 21:40:45,647 [INFO] httpx: HTTP Request: POST https://api.telegram.org/bot7983427325:AAG_3bxOE4uburw2ROGhKxh26os3rnC1pNY/getUpdates "HTTP/1.1 409 Conflict"
+2026-04-25 21:40:45,649 [ERROR] telegram.ext.Updater: Exception happened while polling for updates.
+Traceback (most recent call last):
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 161, in network_retry_loop
+    await do_action()
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 154, in do_action
+    action_cb_task.result()
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_extbot.py", line 672, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\_bot.py", line 4865, in get_updates
+    await self._post(
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\_bot.py", line 704, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_extbot.py", line 370, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\_bot.py", line 733, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\request\_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
+2026-04-25 21:41:19,849 [INFO] httpx: HTTP Request: POST https://api.telegram.org/bot7983427325:AAG_3bxOE4uburw2ROGhKxh26os3rnC1pNY/getUpdates "HTTP/1.1 409 Conflict"
+2026-04-25 21:41:19,851 [ERROR] telegram.ext.Updater: Exception happened while polling for updates.
+Traceback (most recent call last):
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 161, in network_retry_loop
+    await do_action()
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_utils\networkloop.py", line 154, in do_action
+    action_cb_task.result()
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_updater.py", line 340, in polling_action_cb
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_extbot.py", line 672, in get_updates
+    updates = await super().get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\_bot.py", line 4865, in get_updates
+    await self._post(
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\_bot.py", line 704, in _post
+    return await self._do_post(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\ext\_extbot.py", line 370, in _do_post
+    return await super()._do_post(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\_bot.py", line 733, in _do_post
+    result = await request.post(
+             ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\request\_baserequest.py", line 198, in post
+    result = await self._request_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\34663\.gemini\antigravity\scratch\house-bot\.venv\Lib\site-packages\telegram\request\_baserequest.py", line 375, in _request_wrapper
+    raise exception
+telegram.error.Conflict: Conflict: terminated by other getUpdates request; make sure that only one bot instance is running
