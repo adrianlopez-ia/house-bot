@@ -114,7 +114,7 @@ PROVIDERS: dict[str, dict[str, Any]] = {
     "openrouter": {
         "name": "OpenRouter",
         "base_url": "https://openrouter.ai/api/v1",
-        "default_model": "meta-llama/llama-3.3-70b-instruct:free",
+        "default_model": "nvidia/nemotron-3-super-120b-a12b:free",
         "rpd": 10_000,
         "rpm": 60,
         "auto_sites_per_cycle": 60,
@@ -123,6 +123,7 @@ PROVIDERS: dict[str, dict[str, Any]] = {
         "delay_between_sites": 2,
         "key_field": "openrouter_api_key",
         "models": [
+            {"id": "nvidia/nemotron-3-super-120b-a12b:free", "name": "Nvidia Nemotron 120B", "cost": "Gratis", "capacity": "Alta", "description": "El mejor modelo gratis de Nvidia en OpenRouter."},
             {"id": "meta-llama/llama-3.3-70b-instruct:free", "name": "Llama 3.3 70B", "cost": "Gratis", "capacity": "Alta", "description": "Uno de los mejores modelos open source del mundo."},
             {"id": "nousresearch/hermes-3-llama-3.1-405b:free", "name": "Hermes 3 Llama 405B", "cost": "Gratis", "capacity": "Media", "description": "Modelo de 405B muy potente."},
             {"id": "qwen/qwen3-next-80b-a3b-instruct:free", "name": "Qwen3 Next 80B", "cost": "Gratis", "capacity": "Alta", "description": "Modelo rapido y potente de Alibaba."},
